@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320">
+  <rect width="480" height="320" fill="#101421"/>
+  <rect x="0" y="0" width="480" height="36" fill="#1f2d3d"/>
+  <text x="240" y="24" font-family="Montserrat,Arial,sans-serif" font-size="18" fill="#f4f6fb" text-anchor="middle">Главное меню</text>
+  <g fill="#f8f8f8" stroke="#5c77ff" stroke-width="2">
+    <rect x="40" y="60" width="280" height="44" rx="10"/>
+    <rect x="40" y="110" width="280" height="44" rx="10"/>
+    <rect x="40" y="160" width="280" height="44" rx="10"/>
+    <rect x="40" y="210" width="280" height="44" rx="10"/>
+  </g>
+  <g font-family="Montserrat,Arial,sans-serif" font-size="16" fill="#101421">
+    <text x="80" y="87">▶ Температурные профили</text>
+    <text x="80" y="137">✎ Ручной режим</text>
+    <text x="80" y="187">⚙ Настройки</text>
+    <text x="80" y="237">👁 Инфо</text>
+  </g>
+  <text x="360" y="280" font-family="Montserrat,Arial,sans-serif" font-size="14" fill="#ffce3a">⚠ Требуется калибровка</text>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320">
+  <rect width="480" height="320" fill="#0f1820"/>
+  <rect x="0" y="0" width="480" height="36" fill="#26364a"/>
+  <text x="240" y="24" font-family="Montserrat,Arial,sans-serif" font-size="18" fill="#f4f6fb" text-anchor="middle">Ручной режим</text>
+  <g font-family="Montserrat,Arial,sans-serif" fill="#e6ecf6" font-size="16">
+    <text x="40" y="80">Текущая температура:</text>
+    <text x="300" y="80" text-anchor="end">245.5 °C</text>
+    <text x="40" y="120">Целевая температура:</text>
+    <text x="300" y="120" text-anchor="end">260.0 °C</text>
+  </g>
+  <g fill="#1f2d3d" stroke="#5c77ff" stroke-width="2">
+    <rect x="60" y="150" width="60" height="40" rx="6"/>
+    <rect x="140" y="150" width="60" height="40" rx="6"/>
+    <rect x="60" y="210" width="140" height="44" rx="8"/>
+    <rect x="240" y="210" width="140" height="44" rx="8"/>
+  </g>
+  <g font-family="Montserrat,Arial,sans-serif" font-size="18" fill="#f8f8f8">
+    <text x="90" y="178" text-anchor="middle">–</text>
+    <text x="170" y="178" text-anchor="middle">+</text>
+    <text x="130" y="238" text-anchor="middle">Стоп</text>
+    <text x="310" y="238" text-anchor="middle">Назад</text>
+  </g>
+</svg>

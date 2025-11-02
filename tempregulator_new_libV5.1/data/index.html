@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<meta charset="utf-8" />
+<title>testStateMachineV2.2_websocket_0508</title>
+<link rel="stylesheet" href="style.css">
+<script language="javascript" type="text/javascript">
+
+var url = "ws://192.168.4.1:1337/";
+let MaxnProfil = 10; //максимальное количество профилей
+const TestProfileId = 1; // Modified: номер тестового профиля без валидаций
+const DataSettings = {}; //словарь с настройками от esp
+const DataGlobalProf = {}; //глобальный словарь с данными о профилях
+
+// Вызовите функцию init сразу после загрузки страницы
+window.addEventListener("load", init, false);
+
+// This is called when the page finishes loading
+function init() {
+  // Подключиться к серверу WebSocket
+    wsConnect(url);    
+}
+
+// Вызовите это для подключения к серверу WebSocket
+function wsConnect(url) {
+    
+    // Подключиться к серверу WebSocket
+    websocket = new WebSocket(url);
+    
+    // Назначить обратные вызовы
+    websocket.onopen = function(evt) { onOpen(evt) };
+    websocket.onclose = function(evt) { onClose(evt) };
+    websocket.onmessage = function(evt) { onMessage(evt) };
+    websocket.onerror = function(evt) { onError(evt) };
+}
+
+// Вызывается при установлении соединения WebSocket с сервером
+function onOpen(evt) {
+    // Log connection state
+    console.log("Connected");
+    //забираем данные по профилям
+    doSend("InitProfil");
+}
+
+// Called when the WebSocket connection is closed
+function onClose(evt) {
+    // Log disconnection state
+    console.log("Disconnected");       
+    // Попробуйте переподключиться через несколько секунд
+    setTimeout(function() { wsConnect(url) }, 2000);
+}
+
+// Вызывается при получении сообщения от сервера
+function onMessage(evt) {   
+    const data = JSON.parse(evt.data);
+    const imgError = document.getElementById('Error-content-0');
+    const messageArea = document.getElementById('Error-message');
+    if (data !== null){      
+      if (data.activprof) {
+        if (data.activprof !== 0 && data.activprof !== "") {
+          document.getElementById("activprof").textContent = `Активный профиль: ${DataGlobalProf[data.activprof]['sNameProfile']}`;
+          //блочим кнопки
+          UpdateProfil(data.activprof);
+        } else {
+          document.getElementById("activprof").textContent = `Активный профиль: не выбран`;
+        }       
+      }
+      if (data.stateprofil) {
+        document.getElementById("stateprofil").textContent = `Состояние профиля: ${data.stateprofil} `;
+      }
+      if (data.nstupen) {
+        document.getElementById("nstupen").textContent = `Номер ступени: ${data.nstupen} `;
+      }
+      if (data.timestupen) {
+        document.getElementById("timestupen").textContent = `Время работы ступени: ${data.timestupen} `;
+      }
+      if (data.actualtemp) {
+        document.getElementById("actualtemp").textContent = `Температура: ${data.actualtemp} °C`;
+      }
+      if (data.seltemp) {
+        document.getElementById("seltemp").textContent = `Целевая температура: ${data.seltemp} °C`;
+      }
+      if (data.timestartprofil && data.timestartprofil !== null) {       
+        startTimerprofil(data.timestartprofil);    
+      }
+      if (data.timestopprofil == "stop") {       
+        stopTimerprofil();
+      }
+      if (data.timestartstupen && data.timestartstupen !== null) {       
+        startTimerstupen(data.timestartstupen);    
+      }
+      if (data.timestopstupen == "stop") {       
+        stopTimerstupen();
+      }
+      //----------------------------------------------------------------------------------
+      if (data.regisAlarm == true) {        
+        imgError.src="ErrorAlarm.jpg";
+        imgError.alt=data.ErrValregisAlarm;
+        imgError.title=data.ErrValregisAlarm;    
+        imgError.align="right";
+        imgError.width="100";
+        imgError.height="50";
+        //------------------------------------------
+        imgError.addEventListener('click', function() {       
+        messageArea.align="center";
+        messageArea.style.color = 'red';
+        messageArea.style.fontSize = '1.2em';
+        messageArea.textContent = data.ErrValregisAlarm;
+      })
+      } else if (data.regisAlarm == false){
+        imgError.removeAttribute('src');
+        imgError.removeAttribute('alt');
+        imgError.removeAttribute('title');
+        imgError.removeAttribute('align');
+        imgError.removeAttribute('width');
+        imgError.removeAttribute('height');        
+        messageArea.textContent = "";
+      }
+       //------------------------------------------
+       if (data.profisAlarm == true) {
+        document.getElementById("stateprofil").textContent = `Состояние профиля: Здаесь выводим малый знак аларма` ;       
+        //------------------------------------------        
+      } else if (data.profisAlarm == false){
+        document.getElementById("stateprofil").textContent = `Состояние профиля: Тот кторый будет передаться` ;
+      }
+       //------------------------------------------
+    //console.log("Received data.isKalibrate:", data.isKalibrate);
+      //калибровка выполнена
+      //загрузка профилей      
+    if (data.eventMessage === "InitProfil") {
+      //----------------------------------------------------------------------------------
+      //загрузка данных настроек Settings
+      if (data["Settings"] === null){
+        //в Settings нет словаря
+        DataSettings["isKalibrate"] = false;
+        DataSettings["activProf"] = 0;
+        DataSettings["speedHot"] = 0;
+        DataSettings["tRoom"] = 0;
+      } else {
+      
+      if (data["Settings"].isKalibrate) {
+        document.getElementById("Checkbox-isKalibrate").checked = data["Settings"].isKalibrate;
+        DataSettings["isKalibrate"] = data[`Settings`].isKalibrate;
+      }
+      if (data["Settings"].activProf) {
+        document.getElementById("activProf").value = data["Settings"].activProf;
+        DataSettings["activProf"] = data["Settings"].activProf;        
+      }
+      if (data["Settings"].speedHot) {
+        document.getElementById("speedHot").value = data["Settings"].speedHot;
+        DataSettings["speedHot"] = data["Settings"].speedHot;
+      }
+      if (data["Settings"].tRoom) {
+        document.getElementById("tRoom").value = data["Settings"].tRoom;
+        DataSettings["tRoom"] = data["Settings"].tRoom;
+      }
+      }
+      //--------------------------------------------------------------------------------------------------------
+     if (DataSettings["isKalibrate"]){
+     //калибровка выполнена
+     //бежим по именам профилей выдаем их наличие    
+      for (let i = 1; i <= MaxnProfil; i++) {
+        if (`UserTmpProf_${i}` in data) {        
+        //console.log(`Ключ UserTempProfile_${i} существует`);
+        //если есть ключ профиля проверяй дальше переменную "isAvailableForWeb"
+        //если она существуюет в массиве и ее значение true то грузи вкладку профиля
+          if (data[`UserTmpProf_${i}`] !== null) {          
+            if (data[`UserTmpProf_${i}`].isAvailableForWeb == true) {
+              //alert(`UserTempProfile_${i} - true`);
+              LoadProfil(i, data[`UserTmpProf_${i}`].sNameProfile, data[`UserTmpProf_${i}`].data);
+              //Загоняем в глобальный массив профилей
+              DataGlobalProf[i] = {};              
+              DataGlobalProf[i]['sNameProfile'] = data[`UserTmpProf_${i}`].sNameProfile;
+              DataGlobalProf[i]['data'] = data[`UserTmpProf_${i}`].data;
+            }
+          }
+        }        
+      }
+      //выводим активный профиль, который пришел от esp
+      if (data["Settings"].activProf !== 0 && data["Settings"].activProf !== "") {
+        document.getElementById("activprof").textContent = `Активный профиль: ${DataGlobalProf[data["Settings"].activProf]['sNameProfile']}`;
+      } else {
+        document.getElementById("activprof").textContent = `Активный профиль: не выбран`;
+      }
+      //----------------------------------------------------------------------------------------------  
+      //делаем активным главную страницу
+      document.getElementById(`tab-btn-0`).checked = true;
+      //активируем вкладку '+  Добавить профиль'
+      const myButtoncreat = document.getElementById('tab-btn-creat-profil');
+      myButtoncreat.disabled = false;
+      const myButtoncreatlabel = document.getElementById('tab-btn-creat-profil-label');
+      myButtoncreatlabel.disabled = false;
+      myButtoncreatlabel.textContent =`+  Добавить профиль`;
+    
+   } else {
+    //калибровка не выполнена
+    //активируем вкладку '+  Добавить профиль'
+      const myButtoncreat = document.getElementById('tab-btn-creat-profil');
+      myButtoncreat.disabled = false;
+      const myButtoncreatlabel = document.getElementById('tab-btn-creat-profil-label');
+      myButtoncreatlabel.disabled = false;
+      myButtoncreatlabel.textContent =`+  Добавить профиль`;
+    //
+    imgError.src="NeedCalibration.jpg";
+    imgError.alt="Выполните калибровки. Перезагрузите вэб.";
+    imgError.title="Выполните калибровки. Перезагрузите вэб.";    
+    imgError.align="right";
+    imgError.width="100";
+    imgError.height="50";
+//------------------------------------------
+    imgError.addEventListener('click', function() {
+      // Меняем текст элемента с id="message"
+      messageArea.align="center";
+      messageArea.style.color = 'red';
+      messageArea.style.fontSize = '1.2em';
+      messageArea.textContent = 'Выполните калибровки! Перезагрузите вэб.';
+      //alert("Выполните калибровки! Перезагрузите вэб.");
+    });   
+    
+      /*
+      <img src="ErrorAlarm.jpg" alt="ErrorAlarm" title="ErrorAlarm" width="100" height="50">
+      <img src="NeedCalibration.jpg" alt="Выполните калибровки" title="Выполните калибровки" align="right" width="100" height="50">
+      */
+   }
+   }  
+      //----------------------------------------------------------------------------------
+      // Print out our received message
+      //console.log("Received data:", data);
+      //console.log("DataSettings:", DataSettings);
+      //console.log("DataGlobalProf:", DataGlobalProf);             
+    }
+}
+
+
+
+// Called when a WebSocket error occurs
+function onError(evt) {
+    console.log("ERROR: " + evt.data);
+}
+
+// Отправляет сообщение на сервер (и выводит его на консоль)
+function doSend(message) {
+    console.log("Sending: " + message);
+    websocket.send(message);
+}
+
+//массив с нулями при создании не существующего профиля, или удалении профиля
+    const tableDataObjectsNull = [
+      {1_1: 0, 1_2: 0, 1_3: 0},
+      {2_1: 0, 2_2: 0, 2_3: 0},
+      {3_1: 0, 3_2: 0, 3_3: 0},
+      {4_1: 0, 4_2: 0, 4_3: 0},
+      {5_1: 0, 5_2: 0, 5_3: 0},
+      {6_1: 0, 6_2: 0, 6_3: 0},
+      {7_1: 0, 7_2: 0, 7_3: 0},
+      {8_1: 0, 8_2: 0, 8_3: 0},
+      {9_1: 0, 9_2: 0, 9_3: 0},
+      {10_1: 0, 10_2: 0, 10_3: 0},
+    ];
+
+function UpdateProfil(nProfil){
+  //вызывается при обновлении активного профиля. Блочит кнопки на активнов
+  //разблочит на бывшем активном
+  console.log("DataGlobalProf:", DataGlobalProf);
+  for (const [key, value] of Object.entries(DataGlobalProf)){
+    const labelErrElement = document.getElementById(`label-err-inputProfileName-${key}`);
+    const buttonElementS = document.getElementById(`button-save-${key}`);
+    const buttonElementD = document.getElementById(`button-delete-${key}`);
+    //console.log("key:", key, "nProfil", nProfil);
+        if (key == nProfil){
+          labelErrElement.textContent = "Профиль активен - Сохранение/Удаление не возможны!!!";              
+          buttonElementS.disabled = true;
+          buttonElementD.disabled = true;
+        } else {
+          labelErrElement.textContent = "";              
+          buttonElementS.disabled = false;
+          buttonElementD.disabled = false;
+        }
+      }      
+}
+
+
+//<!-- Скрипт таймер --> 
+let startTimeprofil;
+let timerIntervalprofil;
+
+function startTimerprofil(startTimeprofilValue) {
+  startTimeprofil = startTimeprofilValue;
+  timerIntervalprofil = setInterval(updateTimerprofil, 1000);
+  /* document.querySelector('button').disabled = true; */
+}
+
+function stopTimerprofil() {  
+  clearInterval(timerIntervalprofil); 
+  document.getElementById('timestartprofil').textContent = `Время работы с начала запуска профиля: 00:00:00`;  
+}
+
+function updateTimerprofil() {
+  const currentTime = new Date();
+  let startTimeprofilFormat = new Date(startTimeprofil);
+  const elapsedTime = new Date(currentTime - startTimeprofilFormat);
+  const hours = String(elapsedTime.getUTCHours()).padStart(2, '0');
+  const minutes = String(elapsedTime.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(elapsedTime.getUTCSeconds()).padStart(2, '0');
+  document.getElementById('timestartprofil').textContent = `Время работы с начала запуска профиля: ${hours}:${minutes}:${seconds}`;
+}
+
+let startTimestupen;
+let timerIntervalstupen;
+
+function startTimerstupen(startTimestupenValue) {
+  startTimestupen = startTimestupenValue;
+  timerIntervalstupen = setInterval(updateTimerstupen, 1000);
+  /* document.querySelector('button').disabled = true; */
+}
+
+function stopTimerstupen() {  
+  clearInterval(timerIntervalstupen); 
+  document.getElementById('timestupen').textContent = `Время работы ступени: 00:00:00`;  
+}
+
+function updateTimerstupen() {
+  const currentTime = new Date();
+  let startTimestupenFormat = new Date(startTimestupen);
+  const elapsedTime = new Date(currentTime - startTimestupenFormat);
+  const hours1 = String(elapsedTime.getUTCHours()).padStart(2, '0');
+  const minutes1 = String(elapsedTime.getUTCMinutes()).padStart(2, '0');
+  const seconds1 = String(elapsedTime.getUTCSeconds()).padStart(2, '0');
+  document.getElementById('timestupen').textContent = `Время работы ступени: ${hours1}:${minutes1}:${seconds1}`;
+}
+//------------------------------------------------------------------------------------------------------
+  
+// Скрипт добавляет профили при нажатии на кнопку '+ Добавить профиль'
+  function toggleCheckbox() {    
+    const myCheckbox = document.getElementById('tab-btn-creat-profil');
+    const myCheckboxlabel = document.getElementById('tab-btn-creat-profil-label');
+    if (DataSettings["isKalibrate"]){
+    //количество вкладок
+    //выбираем элементы - вкладки
+    const radioButtons = document.querySelectorAll('input[name="tab-btn"]'); // Modified: выбираем вкладки
+    //alert(count);
+    //определяемся с номером минимального свободного профиля
+    //бежим проверяем наличие такой вкладки, если нет создаем  
+    let nProfil = 0; 
+    for (let i = 1; i <= MaxnProfil; i++) {
+      const element = document.getElementById(`tab-btn-${i}`);
+      if (!element){
+        nProfil = i;
+        break;
+      }
+    }
+    //alert(nProfil);
+    //создаем
+    LoadProfil(nProfil, `sNameProfile${nProfil}`, tableDataObjectsNull);
+      //если если достигли максимального количества профилей, удаляем вкладку "+  Добавить профиль"
+      const updatedProfileButtons = Array.from(document.querySelectorAll('input[name="tab-btn"]')).filter((btn) => /^tab-btn-\d+$/.test(btn.id)); // Modified: пересчитываем профили
+      if (updatedProfileButtons.length >= MaxnProfil) {                       // Modified: учитываем лимит профилей
+        //alert('Достигли максимума');
+        myCheckbox.remove();
+        myCheckboxlabel.remove();
+      }
+    } else {
+      myCheckbox.setAttribute('data-tooltip', 'Выполните калибровки! Перезагрузите вэб.');
+      myCheckboxlabel.setAttribute('data-tooltip', 'Выполните калибровки! Перезагрузите вэб.');
+      //делаем активным главную страницу
+      document.getElementById(`tab-btn-0`).checked = true;
+    }
+  }
+  
+  function LoadProfil(nProfil, sProfileName, tableDataObjectsProfil) {
+    //Загружает в ВЭБ профиль номер которого ему передали
+    const element = document.getElementById(`tab-btn-${nProfil}`);            // Modified: проверяем существование вкладки
+    if (!element){                                                           // Modified: вкладки нет — создаём
+      const myCheckbox = document.getElementById('tab-btn-creat-profil');     // Modified: получаем ссылку на "+Добавить профиль"
+      const checkbox = document.createElement('input');                       // Modified: создаём radio
+      const label = document.createElement('label');                          // Modified: создаём label
+      let tabradio = document.getElementById("tab-radio");                   // Modified: контейнер вкладок
+      checkbox.id =`tab-btn-${nProfil}`;                                      // Modified: задаём id
+      checkbox.type = 'radio';                                               // Modified: тип radio
+      checkbox.name = 'tab-btn';                                             // Modified: имя группы вкладок
+      checkbox.value = '';                                                   // Modified: value вкладки
+      if (myCheckbox) {                                                      // Modified: вставляем перед "+Добавить"
+        tabradio.insertBefore(checkbox, myCheckbox);                         // Modified: сохраняем порядок
+      } else {                                                               // Modified: если кнопки создания нет
+        tabradio.appendChild(checkbox);                                      // Modified: добавляем в конец
+      }
+      label.textContent =`${sProfileName}`;                                  // Modified: подписываем вкладку
+      label.id =`label-tab-btn-${nProfil}`;                                  // Modified: id подписи
+      label.setAttribute('for', `tab-btn-${nProfil}`);                       // Modified: связываем label с radio
+      if (myCheckbox) {                                                      // Modified: размещаем label перед "+Добавить"
+        tabradio.insertBefore(label, myCheckbox);                            // Modified: вставляем label
+      } else {                                                               // Modified: иначе добавляем в конец
+        tabradio.appendChild(label);                                         // Modified: восстанавливаем подпись
+      }
+    } else {                                                                  // Modified: вкладка есть — переименовываем
+      const existingLabel = document.getElementById(`label-tab-btn-${nProfil}`); // Modified: ищем label
+      if (existingLabel) {                                                   // Modified: обновляем текст вкладки
+        existingLabel.textContent = `${sProfileName}`;                       // Modified: имя берём из данных
+      }
+    }
+    const currentTab = document.getElementById(`tab-btn-${nProfil}`);        // Modified: актуальная radio вкладки
+    if (currentTab) {                                                        // Modified: активируем вкладку
+      currentTab.checked = true;                                             // Modified: переключаемся на неё
+    }
+    const container = document.getElementById(`content-${nProfil}`);         // Modified: ищем контейнер содержимого
+    if (!container) {                                                        // Modified: если контейнера нет — выходим
+      console.warn(`Контейнер content-${nProfil} не найден`);                // Modified: выводим предупреждение
+      return;                                                                // Modified: прекращаем выполнение
+    }
+    while (container.firstChild) {                                           // Modified: очищаем существующее содержимое
+      container.removeChild(container.firstChild);                           // Modified: удаляем узлы
+    }
+    createInput("inputProfileName", "Наименование профиля:   ", nProfil, sProfileName); // Modified: создаём поле имени
+    const labelErrElement = document.getElementById(`label-err-inputProfileName-${nProfil}`); // Modified: метка ошибок
+    if (labelErrElement) {                                                   // Modified: очищаем подсказку
+      labelErrElement.textContent = "";                                     // Modified: сбрасываем текст
+    }
+    createTable(DataHheadHot, tableDataObjectsProfil, nProfil);              // Modified: создаём таблицу значений
+    createButton(SaveProfil, "button-save", "Сохранить профиль", nProfil); // Modified: кнопка сохранения
+    createButton(DeleteProfil, "button-delete", "Удалить профиль", nProfil); // Modified: кнопка удаления
+    if (Number(nProfil) === TestProfileId) {                                 // Modified: добавляем подсказку тестового профиля
+      createTestProfileHints(nProfil);                                       // Modified: выводим пояснение
+    }
+    if(DataSettings["activProf"] === nProfil){                              // Modified: блокируем активный профиль
+      if (labelErrElement) {                                                 // Modified: сообщаем пользователю
+        labelErrElement.textContent = "Профиль активен - Сохранение/Удаление не возможны!!!"; // Modified: текст предупреждения
+      }
+      const buttonElementS = document.getElementById(`button-save-${nProfil}`); // Modified: кнопка сохранения
+      const buttonElementD = document.getElementById(`button-delete-${nProfil}`); // Modified: кнопка удаления
+      if (buttonElementS) {                                                  // Modified: отключаем
+        buttonElementS.disabled = true;                                      // Modified: запрет сохранения
+      }
+      if (buttonElementD) {                                                  // Modified: отключаем
+        buttonElementD.disabled = true;                                      // Modified: запрет удаления
+      }
+    }
+  }
+
+  function openTestProfileTab() {                                            // Modified: обработка вкладки "Тестовый профиль"
+    LoadProfil(TestProfileId, "Тестовый профиль", tableDataObjectsNull);     // Modified: создаём/обновляем профиль
+    const tabButton = document.getElementById(`tab-btn-${TestProfileId}`);    // Modified: ссылка на настоящую вкладку
+    if (tabButton) {                                                         // Modified: делаем её активной
+      tabButton.checked = true;                                              // Modified: переключаемся на профиль
+    }
+    const helperTab = document.getElementById('tab-btn-test-profile');       // Modified: сбрасываем вспомогательную radio
+    if (helperTab) {                                                         // Modified: возвращаем в неактивное состояние
+      helperTab.checked = false;                                             // Modified: снимаем выбор
+    }
+  }
+  
+  function DeleteProfil(nProfil) {
+    //Удаляет профиль номер которого ему передали. Отсылает сообщение на ESP о том что профиль удалили
+    const DataSaveProfil = {};
+    const DataUserTempProfile = {};
+    let result = confirm("Вы уверены?");          
+      if (result) {        
+      //формируем данные для отправки
+      //--------------------------------------------------------------
+      //отправка по принципу сохранения только обнуляем все и isAvailableForWeb = false
+      //--------------------------------------------------------------
+      //формируем данные
+      let tableId = `table-${nProfil}`;
+      //внутренний словарь
+      // Добавляем пару ключ-значение           
+      //DataUserTempProfile["sNameProfile"] = null;
+      //внешний словарь
+      let keyUserTempProfile = `UserTmpProf_${nProfil}`;
+      DataSaveProfil["eventMessage"] = "DelProfil";
+      DataSaveProfil["sNVSnamespace"] =  keyUserTempProfile;
+      //DataSaveProfil[keyUserTempProfile] = DataUserTempProfile;
+      //console.log(DataSaveProfil);
+      //отправляем на сервер
+      const jsonString = JSON.stringify(DataSaveProfil);
+      doSend(jsonString);
+      //--------------------------------------------------------------
+      //Удаляем из глобального массива профилей
+      delete DataGlobalProf[nProfil];
+      console.log("DataGlobalProf:", DataGlobalProf);
+      //--------------------------------------------------------------
+      //Удаляем профиль
+      //дочерние элементы на вкладке
+      containerId = `content-${nProfil}`;
+      const container = document.getElementById(containerId);
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
+      //саму вкладку
+      const element = document.getElementById(`tab-btn-${nProfil}`);
+      const label = document.getElementById(`label-tab-btn-${nProfil}`);
+      element.remove();
+      label.remove();
+      //делаем активным главную страницу
+      document.getElementById(`tab-btn-0`).checked = true;
+      
+    const myCheckbox = document.getElementById('tab-btn-creat-profil');
+    const myCheckboxlabel = document.getElementById('tab-btn-creat-profil-label');
+    //количество вкладок
+    //выбираем элементы - вкладки
+    const radioButtons = document.querySelectorAll('input[type="radio"]');
+    // Получаем количество выбранных элементов
+    const count = radioButtons.length;
+      //проверяем если при удалении количество вкладок на одну меньше чем максимально допустимое
+      //и нет вкладки '+ Добавить профиль' создаем эту вкладку
+      if (count == MaxnProfil && !myCheckbox) {
+        let tabradio = document.getElementById("tab-radio");
+        const checkbox = document.createElement('input');
+        const label = document.createElement('label');
+        const devcontent0 = document.getElementById("content-0");
+        checkbox.id =`tab-btn-creat-profil`;
+        checkbox.type = 'radio';
+        checkbox.name = 'tab-btn';
+        checkbox.value = '';
+        checkbox.onchange = toggleCheckbox;
+        tabradio.insertBefore(checkbox, devcontent0);
+        label.textContent =`+  Добавить профиль`;
+        label.id =`tab-btn-creat-profil-label`;
+        label.setAttribute('for', `tab-btn-creat-profil`);
+        tabradio.insertBefore(label, devcontent0);        
+      }
+      }
+    }
+
+  //Скрипт добавляет надпись и поле ввода
+    function createInput(inputIdText, TextLabel, IdnProfil, sProfileName) {
+      //inputIdText - префикс Id на input
+      //TextLabel - Текст Label
+      //IdnProfil - Номер профиля, по нему формируется контейнер куда закинуть кнопку
+      containerId = `content-${IdnProfil}`;
+      const container = document.getElementById(containerId);
+      let labelElement = document.createElement('label');
+      labelElement.textContent = TextLabel;
+      labelElement.id = `label-${inputIdText}-${IdnProfil}`;
+      container.appendChild(labelElement);
+      let inputElement = document.createElement("input");
+      inputElement.type = "text";
+      inputElement.id = `${inputIdText}-${IdnProfil}`;
+      inputElement.placeholder = "Введите Наименование профиля";
+      inputElement.value = sProfileName; //значение по умолчанию изначально
+      container.appendChild(inputElement);
+      const br = document.createElement('br');
+      container.appendChild(br);
+      //----------------------------------------------------
+      let labelErrElement = document.createElement('label');
+      labelErrElement.textContent = "";
+      labelErrElement.style.color = 'red'
+      labelErrElement.id = `label-err-${inputIdText}-${IdnProfil}`;
+      container.appendChild(labelErrElement);
+      //----------------------------------------------------
+      const p = document.createElement('p');
+      p.textContent = "Режим нагрева";
+      container.appendChild(p);
+
+      document.getElementById(inputElement.id).addEventListener('input', function(event) {
+        this.value = this.value.replace(/[^a-zA-Z0-9а-яА-Я]/g, ''); // Оставляем только буквы и цифры
+        // event.target.value содержит текущее значение поля ввода
+        console.log('Текущее значение:', event.target.value);
+        //делаем валидацию на одинаковые Названия профилей
+        //------------------------------------------------------
+          let inputValue = event.target.value;
+          let isValidInputsNameProfile = ValidityInputsNameProfile(inputValue, inputElement.id, labelErrElement.id, IdnProfil);          
+          const buttonElementEN = document.getElementById(`button-save-${IdnProfil}`); //Кнопка сохранения. Выключаем ее если не пройдена валидация      
+          //включает/выключает кнопку сохранения в зависимости от того как прошла валидация
+          if (isValidInputsNameProfile === true){
+            buttonElementEN.disabled = false;
+            labelErrElement.textContent = "";
+          }else{
+            buttonElementEN.disabled = true;
+            labelErrElement.textContent = "Профиль с таким именем уже существует, задайте другое!";
+          };
+          //------------------------------------------------------
+      
+      });
+
+      /*
+      //так можно маску прикрутить к полю. Оставил пока для примера
+      inputElement.addEventListener('input', function(event) {
+        const mask = "(999) 999-9999";
+        this.value = formatWithMask(this.value, mask);
+      });*/
+    }
+
+    function ValidityInputsNameProfile(InputsNameProfile, inputElementid, labelErrElementid, nProfil) {
+      //nProfil - номер профиля который редактируем.
+      //проверяет наличие вводимого sNameProfile в DataGlobalProf = {} - глобальный словарь с данными о профилях
+      if (Number(nProfil) === TestProfileId) { // Modified: тестовый профиль минует проверки имени
+        return true;
+      }
+      //изначально задаем что валидация прошла, далее ищем ошибки
+      let isValid = true;
+      const myInputElemen = document.getElementById(inputElementid); //чтобы красить красным если ошибка
+      const mylabelErrElement = document.getElementById(labelErrElementid);
+      //-------------------------------------------------------------------------------------------------
+      //бежим по именам профилей выдаем их наличие
+      for (const [key, value] of Object.entries(DataGlobalProf)){
+        //console.log(`Название профиля - ${key}: `, value['sNameProfile']);
+        if (key != nProfil && InputsNameProfile ===value['sNameProfile']){
+        // если это не наш профиль и вводимое значение совпадает с именем другого профиля        
+        //красим в красный, выкидываем поп-ап
+        //myInputElemen.style.backgroundColor = 'red'; // Подсветить красным цветом
+        //myInputElemen.setAttribute('data-tooltip', 'Профиль с таким именем уже существует, задайте другое!');
+        labelErrElementid.textContent = "Профиль с таким именем уже существует, задайте другое!";        
+        isValid = false; //отключаем кнопку сохранения
+        } else {
+        //убираем красный, убиваем поп-ап
+        //myInputElemen.style.backgroundColor = '#fff'; // Убрать Подсветку красным цветом          
+        //myInputElemen.removeAttribute('data-tooltip');
+        //labelErrElementid.textContent = "";
+        }
+      }    
+    //-------------------------------------------------------------------------------------------------
+      return isValid;
+    }
+
+    //Скрипт добавляет кнопки
+    function createButton(ScriptButton, buttonIdText, TextButton, IdnProfil) {
+      //ScriptButton - Скрипт, который выполняется при нажатии на кнопку
+      //buttonIdText - префикс Id на кнопке
+      //TextButton - Надпись на кнопке
+      //IdnProfil - Номер профиля, по нему формируется контейнер куда закинуть кнопку
+      containerId = `content-${IdnProfil}`;
+      const container = document.getElementById(containerId);
+      const buttonElement = document.createElement("button");
+      buttonElement.type = "button";
+      buttonElement.id = `${buttonIdText}-${IdnProfil}`;
+      buttonElement.textContent = TextButton;
+      buttonElement.addEventListener('click', () => {
+                                                    ScriptButton(IdnProfil);
+                                                    });       
+      //buttonElement.onclick = `"onPress()"`;
+      container.appendChild(buttonElement);
+      }
+
+    function createTestProfileHints(IdnProfil){
+      const container = document.getElementById(`content-${IdnProfil}`); // Modified: получаем контейнер вкладки
+      const hint = document.createElement('p');                           // Modified: создаём подсказку для теста
+      hint.className = 'test-profile-hint';                               // Modified: класс для стилизации
+      hint.textContent = 'Тестовый профиль создан без проверок. Заполните значения вручную для отладки.'; // Modified: текст подсказки
+      container.appendChild(hint);                                        // Modified: добавляем подсказку в DOM
+    }
+    
+    function onPressButtonTest(nProfil){
+      alert(`TEST ok-${nProfil}`);
+    }
+    
+    function SaveProfil(nProfil){
+      let result = confirm("Вы уверены?");
+      const DataSaveProfil = {};
+      const DataUserTempProfile = {};
+      //const data = [];
+      if (result) {
+        //оставил на случай если нужно будет обрабатывать "Отмена"
+        // Действие, если пользователь нажал "ОК" (Да)
+        //alert("Вы нажали Да");
+      //} else {
+        // Действие, если пользователь нажал "Отмена" (Нет)
+      //  alert("Вы нажали Нет");
+      //-----------------------------------------------------------------------
+      //формируем данные
+      let tableId = `table-${nProfil}`;
+      //внутренний словарь
+      // Добавляем пару ключ-значение
+      let ProfileNameinputElement = document.getElementById(`inputProfileName-${nProfil}`);      
+      DataUserTempProfile["sNameProfile"] = ProfileNameinputElement.value;
+      //console.log(ProfileNameinputElement);
+      //console.log(ProfileNameinputElement.value);
+      DataUserTempProfile["isAvailableForWeb"] = true;
+      DataUserTempProfile["data"] = getTableData(tableId, 1, 1); //получаем данные таблицы
+      //внешний словарь
+      let keyUserTempProfile = `UserTmpProf_${nProfil}`;
+      DataSaveProfil["eventMessage"] = "SaveProfil";
+      DataSaveProfil["sNVSnamespace"] =  keyUserTempProfile;
+      DataSaveProfil[keyUserTempProfile] = DataUserTempProfile;
+      //Загоняем в глобальный массив профилей
+      DataGlobalProf[nProfil] = {};              
+      DataGlobalProf[nProfil]['sNameProfile'] = ProfileNameinputElement.value;
+      DataGlobalProf[nProfil]['data'] = getTableData(tableId, 1, 1);
+      //console.log(DataSaveProfil);
+      //отправляем на сервер
+      const jsonString = JSON.stringify(DataSaveProfil);
+      doSend(jsonString);
+      //переопределяем название профиля в шапке
+      let labelProfileName = document.getElementById(`label-tab-btn-${nProfil}`);
+      labelProfileName.textContent =ProfileNameinputElement.value;
+      labelProfileName.setAttribute('for', `tab-btn-${nProfil}`);
+      //console.log("DataGlobalProf:", DataGlobalProf);
+      }
+    }
+
+    //Скрипт формирования таблиц
+    function createTable(datathead, data, IdnProfil) {
+      //datathead - массив с заголовком таблицы
+      //data - данные тела таблицы
+      //IdnProfil - Номер профиля, по нему формируется контейнер куда закинуть Таблицу
+      containerId = `content-${IdnProfil}`;
+      const container = document.getElementById(containerId);
+      const table = document.createElement('table');
+      table.id = `table-${IdnProfil}`;
+      
+      //реакция ячеек таблицы
+      table.addEventListener('focusin', function(event) {
+        if (event.target.hasAttribute('contenteditable')) {
+          event.target.style.backgroundColor = '#fff';
+          event.target.removeAttribute('data-tooltip');
+        }       
+      });
+
+     /* table.addEventListener('focusout', function(event) {
+        if (event.target.hasAttribute('contenteditable')) {
+          event.target.style.backgroundColor = '#f0f0f0';
+        }        
+      });      */
+
+      // Создаем заголовок таблицы
+      const thead = document.createElement('thead');
+      const headerRow = document.createElement('tr');
+      for (let i = 0; i < datathead.length; i++) {
+        const th = document.createElement('th');
+        th.textContent = datathead[i];
+        headerRow.appendChild(th);
+      }
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Создаем тело таблицы
+      const tbody = document.createElement('tbody');
+      for (let i = 0; i < data.length; i++) {
+          const rowData = data[i];
+          const row = document.createElement('tr');
+          //создаем первый столбец с нумерацией
+          const cell = document.createElement('td');             
+          cell.textContent = i + 1;
+          row.appendChild(cell);           
+          //Закидываем данные
+          for(const key in rowData) {
+            const cell = document.createElement('td');
+            cell.contentEditable ='true';
+            //cell.setAttribute('data-tooltip', '');//вторым параметром указывается текст подсказки здесь пустое
+            cell.textContent = rowData[key];
+            row.appendChild(cell);
+          }          
+          tbody.appendChild(row);
+      }
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      // Получаем все ячейки таблицы
+      const cells = document.querySelectorAll('table td');
+      // Добавляем обработчик события для каждой ячейки
+      cells.forEach(cell => {
+        //------------------------------------------------------
+        cell.addEventListener('click', () => {
+          // Проверяем текущее значение ячейки
+          if (cell.textContent === '0') {
+            // Если значение 0, заменяем на пустую строку
+            cell.textContent = '';
+          }
+        });
+        //------------------------------------------------------
+        cell.addEventListener('input', function(event) {
+          // Получаем текущее значение ячейки
+          //const newValue = cell.textContent;
+          //console.log(newValue);      
+          //const inputValue = this.value;
+          const inputValue = cell.textContent;
+          //const newValue = inputValue.replace(/[^0-9]/g, ''); // Удаляем все, кроме цифр
+          //удаляем все кроме цифр точки и двух цифр за точкой
+          const newValue = inputValue.replace(/[^0-9.]/g, '').replace(/(\.\d*)\./g, '$1').replace(/(\.\d{2}).*/, '$1');
+          console.log(newValue);
+          if (inputValue !== newValue) {            
+            cell.textContent = newValue;
+            //----------------------------------------
+            // так геморно перемещается курсор в конец строки когда объект имеет не value а textContent
+            const range = document.createRange();
+            const selection = window.getSelection();
+            range.selectNodeContents(cell);
+            range.collapse(false); // false для вставки в конце
+            selection.removeAllRanges();
+            selection.addRange(range);
+            //----------------------------------------                      
+          } 
+        });
+        //------------------------------------------------------
+        cell.addEventListener('keydown', function(event) {
+          if (event.key === 'Enter' || event.keyCode === 13) {
+            this.blur(); // Убираем фокус с элемента
+          }
+        });
+        //------------------------------------------------------
+        cell.addEventListener('focusout', () => {
+          // Проверяем текущее значение ячейки
+          if (cell.textContent === '') {
+            // Если значение ПУСТОЕ, заменяем на 0
+            cell.textContent = '0';
+          }
+          //забираем значения ячеек и отправляем на Валидацию
+          //вывод массива в консоль        
+          //console.log(getTableData(`table-${IdnProfil}`, 1, 0));
+          //вывод конкретного значения
+          //alert(getTableData(`table-${IdnProfil}`)[0]['1_2']);
+          //------------------------------------------------------
+          let isValidData = ValidityTableData(`table-${IdnProfil}`, getTableData(`table-${IdnProfil}`, 1, 0), IdnProfil); // Modified: передаём номер профиля
+          //console.log(isValidData);
+          //console.log(`button-save-${IdnProfil}`);
+          const buttonElementEN = document.getElementById(`button-save-${IdnProfil}`); //Кнопка сохранения. Выключаем ее если не пройдена валидация      
+          //включает/выключает кнопку сохранения в зависимости от того как прошла валидация
+          if (isValidData === true){
+            buttonElementEN.disabled = false;
+          }else{
+            buttonElementEN.disabled = true;
+          };
+          //------------------------------------------------------
+        });
+        //------------------------------------------------------        
+        //------------------------------------------------------
+      });
+
+    }
+  
+
+  
+
+  function ValidityTableData(tableId, DataTable, nProfil) {
+    //Валидация значений таблицы
+    //-----------------------------------------------
+    //tableId - Id таблицы
+    //DataTable - данные в таблице
+    //-----------------------------------------------
+    //Возвращает isValid
+    //console.log(tableId);
+    //console.log(DataTable);
+    //изначально задаем что валидация таблицы прошла, далее ищем ошибки
+    if (Number(nProfil) === TestProfileId) { // Modified: тестовый профиль пропускаем
+      return true;
+    }
+    let isValid = true;
+    const myTable = document.getElementById(tableId);
+    const tableCells = myTable.querySelectorAll('table td');
+    let cellIndex = 0; // Индекс нужной ячейки (начиная с 0)
+   
+
+    //Значение температуры не может быть больше 1300 и выдержка времени при такой температуре не может быть больше 5.
+    cellIndex = 0;
+    for (let i = 0; i < DataTable.length; i++) {     
+      cellIndex = cellIndex + 1;
+      if (Object.values(DataTable[i])[1] > 1300) {
+            const cell = tableCells[cellIndex];          
+            cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+            cell.setAttribute('data-tooltip', 'Значение температуры не может быть больше 1300 °C');
+            isValid = false;
+          }
+      cellIndex = cellIndex + 1;
+      if (Object.values(DataTable[i])[2] > 1300) {
+            const cell = tableCells[cellIndex];          
+            cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+            cell.setAttribute('data-tooltip', 'Значение температуры не может быть больше 1300 °C');
+            isValid = false;
+          }
+      cellIndex = cellIndex + 1;
+      if ((Object.values(DataTable[i])[1] === 1300 || Object.values(DataTable[i])[2] === 1300) && Object.values(DataTable[i])[3] > 5) {
+            const cell = tableCells[cellIndex];          
+            cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+            cell.setAttribute('data-tooltip', 'Выдержка времени при температуре 1300 °C не может быть больше 5');
+            isValid = false;
+          }
+      cellIndex = cellIndex + 1;
+    }
+    //Разница между первым и вторым значением не должны быть меньше 10, но могуть равны друг другу или разница может быть больше 10.
+    cellIndex = 0;
+    for (let i = 0; i < DataTable.length; i++) {     
+      cellIndex = cellIndex + 1;
+      let raznisa = Object.values(DataTable[i])[2] - Object.values(DataTable[i])[1];
+      const cell = tableCells[cellIndex];
+      if ((Object.values(DataTable[i])[1] != Object.values(DataTable[i])[2]) && (raznisa < 10)) {                      
+            cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+            cell.setAttribute('data-tooltip', 'Разница между первым и вторым значением меньше 10, значения могут быть равны');
+            isValid = false;            
+          }
+      //-----------------------------------------------------------------
+      //гасим красный если все норм
+      if ((Object.values(DataTable[i])[1] === Object.values(DataTable[i])[2]) || (raznisa >= 10)) {           
+            cell.style.backgroundColor = '#fff'; // Убрать Подсветку ячейки красным цветом          
+            cell.removeAttribute('data-tooltip');
+          }
+      cellIndex = cellIndex + 3;
+        }
+
+    //самое первое значение не может первышать 50 градусов и быть меньше температуры в комнате
+    //const First = Object.values(DataTable[0])[0];
+    //console.log(First);
+    cellIndex = 1;
+    const cell = tableCells[cellIndex];
+    if (Object.values(DataTable[0])[1] > 50) {          
+      cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+      cell.setAttribute('data-tooltip', 'Самое первое значение не может первышать 50 °C');
+      isValid = false;
+    }
+
+    cellIndex = 1;    
+    if (Object.values(DataTable[0])[1] <  DataSettings["tRoom"]) {          
+      cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+      cell.setAttribute('data-tooltip', `Температура в комнате ${DataSettings["tRoom"]} °C Самое первое значение не может меньше`);
+      isValid = false;
+    }
+
+    //Крайнее значение ступени должно быть меньше или равно первому значению в след.ступени
+    cellIndex = 0;
+    for (let i = 0; i < DataTable.length - 1; i++) {     
+      cellIndex = cellIndex + 2;
+      //let raznisa = Object.values(DataTable[i])[2] - Object.values(DataTable[i])[1];
+      const cell = tableCells[cellIndex];
+      //определяем есть ли значения ниже (или все заполнено нулями)
+      let isValueBottom = false; //значений ниже нет
+      for (let vb = i + 1; vb < DataTable.length; vb++) {
+        if (Object.values(DataTable[vb])[1] != 0 || Object.values(DataTable[vb])[2] != 0) {
+          //если нашли элемент не равный нулю
+          isValueBottom = true;
+        } 
+      }
+      //если есть ниже значения не нули
+      if (isValueBottom === true) {
+        if (Object.values(DataTable[i + 1])[1] < Object.values(DataTable[i])[2]) {                      
+          cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+          cell.setAttribute('data-tooltip', 'Крайнее значение ступени должно быть меньше или равно первому значению в след.ступени');
+          isValid = false;            
+        } else {
+          cell.style.backgroundColor = '#fff'; // Убрать Подсветку ячейки красным цветом          
+          cell.removeAttribute('data-tooltip');
+        }
+
+      }      
+      cellIndex = cellIndex + 2;
+    }
+  //Если заполнены значения температуры, то время должно быть больше нуля
+  cellIndex = 0;
+  for (let i = 0; i < DataTable.length; i++) {     
+    cellIndex = cellIndex + 3;
+    const cell = tableCells[cellIndex];
+    if ((Object.values(DataTable[i])[1] != 0 || Object.values(DataTable[i])[2] != 0) && Object.values(DataTable[i])[3] === 0) {                           
+      cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+      cell.setAttribute('data-tooltip', 'Если заполнены значения температуры, то время должно быть больше нуля');
+      isValid = false;            
+      }      
+      cellIndex = cellIndex + 1;
+        }
+
+  //Скорость нагрева не должна превышать максимальную скорость нагрева найденную при калибровке ПИД
+  cellIndex = 0;
+  for (let i = 0; i < DataTable.length; i++) {     
+    cellIndex = cellIndex + 3;
+    const cell = tableCells[cellIndex];
+
+    if ((Object.values(DataTable[i])[1] != 0 || Object.values(DataTable[i])[2] != 0) && Object.values(DataTable[i])[3] != 0) {  
+      //если все заполнено считай скорость
+      let MaxnSpeedHot = (Object.values(DataTable[i])[2] - Object.values(DataTable[i])[1])/Object.values(DataTable[i])[3];
+      if (MaxnSpeedHot > DataSettings["speedHot"]){                    
+        cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+        cell.setAttribute('data-tooltip', `Максимальная скорость нагрева ${DataSettings["speedHot"]}. Ваша скорость нагрева ${MaxnSpeedHot}`);
+        isValid = false;
+      } else {
+        cell.style.backgroundColor = '#fff'; // Убрать Подсветку ячейки красным цветом          
+        cell.removeAttribute('data-tooltip');
+      }            
+      }      
+      cellIndex = cellIndex + 1;
+        }
+
+  //валидация на уникальность имени
+  cellIndex = 0;
+  for (let i = 0; i < DataTable.length; i++) {     
+    cellIndex = cellIndex + 3;
+    const cell = tableCells[cellIndex];
+    if ((Object.values(DataTable[i])[1] != 0 || Object.values(DataTable[i])[2] != 0) && Object.values(DataTable[i])[3] === 0) {                           
+      cell.style.backgroundColor = 'red'; // Подсветить ячейку красным цветом
+      cell.setAttribute('data-tooltip', 'Если заполнены значения температуры, то время должно быть больше нуля');
+      isValid = false;            
+      }      
+      cellIndex = cellIndex + 1;
+        }
+
+    return isValid;
+  }
+
+  // массивы с заголовками таблиц
+  const DataHheadHot = ['N', 'начальная температура', 'конечная температура', 'время нагрева, мин'];    
+    
+
+  function getTableData(tableId, NachI, NachJ) {
+    //tableId - Id Таблицы например `table-${IdnProfil}`
+    //NachI, NachJ - первые строка и столбец с которых начинать собирать. Отсчет с 0.
+    const table = document.getElementById(tableId);
+    const data = [];
+
+    if (table) {
+      const rows = table.rows;
+
+      for (let i = NachI; i < rows.length; i++) {
+        const rowData = {};
+        const cells = rows[i].cells;
+
+        for (let j = NachJ; j < cells.length; j++) {
+          let key = i.toString() + "_" + j.toString();
+          let value = parseFloat(cells[j].textContent);
+          //rowData.push(cells[j].textContent);
+          rowData[key] = value; // Добавляем пару ключ-значение
+        }
+        data.push(rowData);
+      }
+    } else {
+      console.error("Таблица с ID '" + tableId + "' не найдена.");
+    }
+    //console.log("Вызвано с параметром:", tableId);
+    //console.log("data:", data);
+    return data;
+  }
+
+// Пример использования:
+//const tableData = getTableData("myTable");
+//console.log(tableData);
+
+  //скрипт проверяет вводимые значения на соответсвие маске ввода
+  function formatWithMask(value, mask) {
+        let maskedValue = '';
+        let maskCharIndex = 0;
+        for (let i = 0; i < value.length; i++) {
+            while (maskCharIndex < mask.length && (mask[maskCharIndex] !== '9' && mask[maskCharIndex] !== 'a' && mask[maskCharIndex] !== '*')) {
+                maskedValue += mask[maskCharIndex];
+                maskCharIndex++;
+            }
+            if (maskCharIndex < mask.length) {
+                const maskChar = mask[maskCharIndex];
+                const inputValue = value[i];
+                if ((maskChar === '9' && /[0-9]/.test(inputValue)) ||
+                    (maskChar === 'a' && /[a-zA-Z]/.test(inputValue)) ||
+                    (maskChar === '*' && /[0-9a-zA-Z]/.test(inputValue))) {
+                    maskedValue += inputValue;
+                    maskCharIndex++;
+                } else if (maskChar !== '9' && maskChar !== 'a' && maskChar !== '*') {
+                     maskedValue += maskChar;
+                     maskCharIndex++;
+                     i--; // Повторить обработку текущего символа
+                 }
+            }
+        }
+        return maskedValue;
+    }
+</script>
+
+
+
+
+<script>
+  function EmulSettingsFromNVS(){
+    //отправляет данные эмуляции на esp
+    const CbisKalibrate = document.getElementById(`Checkbox-isKalibrate`);
+    const CbprofisAlarm = document.getElementById(`Checkbox-profisAlarm`);
+    const CbregisAlarm = document.getElementById(`Checkbox-regisAlarm`);
+    const activProf = document.getElementById(`activProf`);
+    const speedHot = document.getElementById(`speedHot`);
+    const tRoom = document.getElementById(`tRoom`);
+   let result = confirm("Вы уверены?");
+      const DataSaveProfil = {};
+      const DataEmulSettings = {};
+      //const data = [];
+      if (result) {        
+      //формируем данные      
+      //внутренний словарь
+      // Добавляем пару ключ-значение           
+      DataEmulSettings["isKalibrate"] = CbisKalibrate.checked;
+      //console.log(CbisKalibrate);
+      //console.log(CbisKalibrate.value);
+      //DataEmulSettings["profisAlarm"] = CbprofisAlarm.checked;
+      //DataEmulSettings["regisAlarm"] = CbregisAlarm.checked;
+      DataEmulSettings["activProf"] = activProf.value;
+      DataEmulSettings["speedHot"] = speedHot.value;
+      DataEmulSettings["tRoom"] = tRoom.value;
+           
+      //внешний словарь
+      let EmulSettings = `EmulSettings`;
+      DataSaveProfil["eventMessage"] = "EmulSetting";
+      DataSaveProfil["sNVSnamespace"] =  "Settings";
+      DataSaveProfil[EmulSettings] = DataEmulSettings;
+      //console.log(DataSaveProfil);
+      //отправляем на сервер
+      const jsonString = JSON.stringify(DataSaveProfil);
+      doSend(jsonString);
+      }
+  }
+</script>
+
+<script>
+  //Эмуляция значений
+  function EmulCheckbox(IdCheckbox, name){
+    //Чекбоксы
+    const SendjsonString = {};    
+    let myCheckbox = document.getElementById(IdCheckbox);
+        if (myCheckbox.checked) {
+          SendjsonString[name] = myCheckbox.checked;         
+          console.log(SendjsonString);
+        } else {
+          SendjsonString[name] = myCheckbox.checked;
+          console.log(SendjsonString);
+        }
+        const jsonString = JSON.stringify(SendjsonString);
+        console.log(jsonString);
+        doSend(jsonString);
+  }
+
+  function EmulTimeStart(name){
+    //Время запуска
+    const SendjsonString = {};
+
+    SendjsonString[name] = new Date().getTime();
+    console.log(SendjsonString);       
+    const jsonString = JSON.stringify(SendjsonString);
+    console.log(jsonString);
+    doSend(jsonString);
+  }
+
+  function EmulTimeStop(name){
+    //Остановка таймера и обнуление
+    const SendjsonString = {};    
+    SendjsonString[name] = "stop";
+    console.log(SendjsonString);       
+    const jsonString = JSON.stringify(SendjsonString);
+    console.log(jsonString);
+    doSend(jsonString);
+  }
+
+  function EmulInputValue(IdInput){
+    //Изменение параметров (Номер ступени, Активный профиль, Целевая температура и т.д)
+    const SendjsonString = {};    
+    let myEmulInputValue = document.getElementById(IdInput);
+    if (myEmulInputValue.value != ''){
+    SendjsonString[IdInput] = myEmulInputValue.value;         
+    console.log(SendjsonString);        
+    const jsonString = JSON.stringify(SendjsonString);
+    console.log(jsonString);
+    doSend(jsonString);
+    }
+  }
+</script>
+
+<div class="container">
+  <div id="tab-radio" class="tab">
+    <input checked id="tab-btn-0" name="tab-btn" type="radio" value="0">
+    <label for="tab-btn-0">Главная</label>    
+    <!--<input id="tab-btn-1" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-1">Профиль 1</label>    
+    <input id="tab-btn-2" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-2">Профиль 2</label>
+    <input id="tab-btn-3" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-3">Профиль 3</label>
+    <input id="tab-btn-4" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-4">Профиль 4</label>
+    <input id="tab-btn-5" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-5">Профиль 5</label>
+    <input id="tab-btn-6" name="tab-btn" type="radio" value="">
+    <label for="tab-btn-6">Профиль 6</label>-->
+    <!-- ------------------------------------------------------------------------------------------------>
+    <input id="tab-btn-test-profile" name="tab-btn" type="radio" value="" onchange="openTestProfileTab()"> <!-- Modified: вкладка тестового профиля -->
+    <label for="tab-btn-test-profile">Тестовый профиль</label> <!-- Modified: подпись тестовой вкладки -->
+    <input id="tab-btn-creat-profil" name="tab-btn" type="radio" value="" onchange="toggleCheckbox()" disabled>
+    <label id="tab-btn-creat-profil-label" for="tab-btn-creat-profil" disabled></label> <!--+  Добавить профиль-->
+    <!--------------------------------------------------------------------------------------------------->
+    <div class="tab-content" id="content-0">
+      <p id="activprof">Активный профиль: не выбран</p>      
+      <p id="stateprofil">Состояние профиля: ----</p>
+      <p id="nstupen">Номер ступени: ----</p>
+      <p id="timestupen">Время работы ступени: 00:00:00</p>
+      <p id="actualtemp">Температура: ----°C</p>
+      <p id="seltemp">Целевая температура: ----°C</p>
+      <p id="timestartprofil">Время работы с начала запуска профиля: 00:00:00</p>
+      <!--<button id="toggleButton" onclick="onPress()">Отправка тестового словаря</button>
+      <button id="TestGetTableData" onclick="getTableData('table-1')">TestGetTableData</button>
+      <button id="TestLoadProfil" onclick="EmulEspMsg()">TestLoadProfil</button>-->
+      <img id="Error-content-0">
+      <br>
+      <p id="Error-message"></p>    
+      <!--
+      <img src="ErrorAlarm.jpg" alt="ErrorAlarm" title="ErrorAlarm" width="100" height="50">
+      <img src="NeedCalibration.jpg" alt="Выполните калибровки" title="Выполните калибровки" align="right" width="100" height="50">
+    -->    
+      <div id="emul">
+        <p>-----------------------------------------------------</p>
+        <p>Эмуляция</p>
+        <input type="checkbox" id="Checkbox-isKalibrate" name="isKalibrate">
+        <label for="Checkbox-isKalibrate">isKalibrate</label>        
+        <br>
+        <label for="activProf">Активный профиль:</label>
+        <input type="text" id="activProf" name="activProf">
+        <br>
+        <label for="speedHot">Скорость нагрева:</label>
+        <input type="text" id="speedHot" name="speedHot">
+        <br>
+        <label for="tRoom">Температура в комнате:</label>
+        <input type="text" id="tRoom" name="tRoom">
+        <br>
+        <button type="button" onclick="EmulSettingsFromNVS()">Сохранить на esp</button>
+        <p>-----------------------------------------------------</p>
+        <input type="checkbox" id="Checkbox-profisAlarm" name="profisAlarm" onchange="EmulCheckbox(id, name)">
+        <label for="Checkbox-profisAlarm">TempProfile в Alarm</label>
+        <input type="checkbox" id="Checkbox-regisAlarm" name="regisAlarm" onchange="EmulCheckbox(id, name)">
+        <label for="Checkbox-regisAlarm">TempRegulator в Alarm</label>
+        <br>
+        <button type="button" name="emulTimestartprofil" onclick="EmulTimeStart(name)">Запустить профиль</button>
+        <button type="button" name="emulTimestopprofil" onclick="EmulTimeStop(name)">Остановить профиль</button>
+        <br>
+        <button type="button" name="emulTimestartstupen" onclick="EmulTimeStart(name)">Запустить ступень</button>
+        <button type="button" name="emulTimestopstupen" onclick="EmulTimeStop(name)">Остановить ступень</button>
+        <br>
+        <label for="emulNstupen">Номер ступени:</label>
+        <input type="text" id="emulNstupen" name="emulNstupen">
+        <button type="button" onclick="EmulInputValue('emulNstupen')">Сменить ступень</button>
+        <br>
+        <label for="emulActivprof">Активный профиль:</label>
+        <input type="text" id="emulActivprof" name="emulActivprof">
+        <button type="button" onclick="EmulInputValue('emulActivprof')">Сменить Активный профиль</button>
+        <br>
+        <label for="emulSeltemp">Целевая температура:</label>
+        <input type="text" id="emulSeltemp" name="emulSeltemp">
+        <button type="button" onclick="EmulInputValue('emulSeltemp')">Сменить Целевую температуру</button>
+        <p>-----------------------------------------------------</p>
+        <!--
+        
+        doc["isKalibrate"] = preferences.getBool("isKalibrate", false);
+        doc["activProf"] = preferences.getUInt("activProf", 0);
+        doc["speedHot"] = preferences.getUInt("speedHot", 1);
+        doc["tRoom"] = preferences.getUInt("tRoom", 25);
+        doc["profisAlarm"] = preferences.getBool("profisAlarm", true);
+        doc["regisAlarm"] = preferences.getBool("regisAlarm", true);
+        -->
+      </div>
+    </div>
+    <div class="tab-content" id="content-1"></div>
+    <div class="tab-content" id="content-2"></div>
+    <div class="tab-content" id="content-3"></div>
+    <div class="tab-content" id="content-4"></div>
+    <div class="tab-content" id="content-5"></div>
+    <div class="tab-content" id="content-6"></div>
+    <div class="tab-content" id="content-7"></div>
+    <div class="tab-content" id="content-8"></div>
+    <div class="tab-content" id="content-9"></div>
+    <div class="tab-content" id="content-10"></div>
+  </div>
+</div>
+

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 320">
+  <rect width="480" height="320" fill="#111a24"/>
+  <rect x="0" y="0" width="480" height="36" fill="#2b3b52"/>
+  <text x="240" y="24" font-family="Montserrat,Arial,sans-serif" font-size="18" fill="#f4f6fb" text-anchor="middle">Настройки</text>
+  <g fill="#f8f8f8" stroke="#65d5ff" stroke-width="2">
+    <rect x="40" y="60" width="280" height="44" rx="10"/>
+    <rect x="40" y="110" width="280" height="44" rx="10"/>
+    <rect x="40" y="160" width="280" height="44" rx="10"/>
+    <rect x="40" y="210" width="280" height="44" rx="10"/>
+  </g>
+  <g font-family="Montserrat,Arial,sans-serif" font-size="16" fill="#101421">
+    <text x="80" y="87">🧪 Калибровка термопары</text>
+    <text x="80" y="137">📐 Калибровка тача</text>
+    <text x="80" y="187">🎯 Автонастройка PID</text>
+    <text x="80" y="237">♻ Сброс настроек</text>
+  </g>
+  <rect x="340" y="60" width="100" height="190" rx="12" fill="#1f2d3d" stroke="#65d5ff" stroke-width="2"/>
+  <text x="390" y="90" font-family="Montserrat,Arial,sans-serif" font-size="14" fill="#f8f8f8" text-anchor="middle">Состояние</text>
+  <text x="390" y="120" font-family="Montserrat,Arial,sans-serif" font-size="12" fill="#d1f0ff" text-anchor="middle">PID: готов</text>
+  <text x="390" y="140" font-family="Montserrat,Arial,sans-serif" font-size="12" fill="#d1f0ff" text-anchor="middle">Тач: калибр.</text>
+  <text x="390" y="160" font-family="Montserrat,Arial,sans-serif" font-size="12" fill="#d1f0ff" text-anchor="middle">Профиль: 2</text>
+  <text x="390" y="180" font-family="Montserrat,Arial,sans-serif" font-size="12" fill="#ffce3a" text-anchor="middle">Обновите</text>
+</svg>
