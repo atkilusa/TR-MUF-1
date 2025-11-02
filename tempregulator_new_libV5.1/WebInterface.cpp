@@ -268,29 +268,30 @@ void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
                                         const String& sProfileName,
                                         bool xIsAvailableForWeb,
                                         TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]) {
-  TemperatureProfile profile;                                            // Modified: используем логику TemperatureProfile
-  profile.setNamespace(sNVSnamespaceKey);                                // Modified: назначаем пространство NVS
-  profile.setDefaultName(sProfileName);                                  // Modified: сохраняем имя по умолчанию
-
-  size_t usedRowCount = 0;                                               // Modified: определяем количество заполненных строк
-  for (int i = 0; i < TemperatureProfile::MAX_ROWS; ++i) {               // Modified: перебираем все строки
-    const TempProfileRow& row = dataTempProfileRows[i];                  // Modified: читаем данные строки
-    if (row.rTime != 0.0f || row.rStartTemperature != 0.0f || row.rEndTemperature != 0.0f) {
-      usedRowCount = static_cast<size_t>(i + 1);                         // Modified: запоминаем последнюю непустую строку
-    }
+  PreferencesLock lock;                                                   // Modified: синхронизируем доступ к общему Preferences
+  if (!preferences.begin(sNVSnamespaceKey.c_str(), false)) {              // Modified: открываем нужное пространство на запись
+    Serial.println("Failed to open NVS namespace for reading");          // Modified: повторяем исходный лог ошибки
+    return;                                                               // Modified: прекращаем сохранение при ошибке
   }
 
-  if (profile.saveToNVS(sProfileName,                                     // Modified: сохраняем через общий метод
-                         dataTempProfileRows,
-                         usedRowCount,
-                         xIsAvailableForWeb)) {
-    Serial.printf("[WS] Profile '%s' saved (%u rows)\n",                 // Modified: подробный лог сохранения
-                  sNVSnamespaceKey.c_str(),
-                  static_cast<unsigned>(usedRowCount));
-  } else {
-    Serial.printf("[WS] Failed to save profile '%s' via TemperatureProfile\n",  // Modified: лог ошибки
-                  sNVSnamespaceKey.c_str());
+  preferences.putString("sNameProfile", sProfileName);                   // Modified: записываем имя профиля
+  preferences.putString("name",        sProfileName);                    // Modified: совместимость со старым ключом имени
+  preferences.putBool("isAvlablForWeb", xIsAvailableForWeb);             // Modified: флаг отображения в вебе
+  preferences.putBool("visible",        xIsAvailableForWeb);             // Modified: синхронизируем с LVGL
+
+  for (int i = 0; i < TemperatureProfile::MAX_ROWS; ++i) {                // Modified: сохраняем каждую строку температурного профиля
+    String baseKey = "row" + String(i) + "_";                            // Modified: базовый префикс ключа в NVS
+    preferences.putFloat((baseKey + "rStartTemp").c_str(),               // Modified: стартовая температура ступени
+                         dataTempProfileRows[i].rStartTemperature);
+    preferences.putFloat((baseKey + "rEndTemp").c_str(),                 // Modified: конечная температура ступени
+                         dataTempProfileRows[i].rEndTemperature);
+    preferences.putFloat((baseKey + "rTime").c_str(),                    // Modified: длительность ступени
+                         dataTempProfileRows[i].rTime);
   }
+
+  preferences.end();                                                      // Modified: закрываем пространство после записи
+  Serial.printf("[WS] Profile '%s' saved to NVS\n",                       // Modified: подтверждаем успешную запись
+                sNVSnamespaceKey.c_str());
 }
 
 // --------------------------------------------------------------------------------------

@@ -44,9 +44,12 @@
 2. `TempRegulator::loadTemperatureProfiles()` и `WebInterface::processInitDataToWeb()`
    читают данные через общий `preferences` и отправляют их в UI и браузер.
 3. Когда пользователь сохраняет профиль в вебе, `ParseProfileDataFromWeb()`
-   разбирает JSON и передаёт данные в `SaveProfileDataToNVS()`.
-4. После записи профиль заново загружается из NVS, чтобы не возникало расхождений
-   между памятью и содержимым хранилища.
+   разбирает JSON и передаёт данные в `SaveProfileDataToNVS()`, которая напрямую
+   обновляет ключи `sNameProfile`, `isAvlablForWeb`, `visible` и таблицу строк в
+   выбранном пространстве NVS.
+4. После записи веб-интерфейс инициирует `TempRegulator::loadTemperatureProfiles()`,
+   чтобы соответствующий экземпляр `TemperatureProfile` перечитал данные и отразил
+   изменения в UI и PID-логике.
 
 ## Отладка
 
