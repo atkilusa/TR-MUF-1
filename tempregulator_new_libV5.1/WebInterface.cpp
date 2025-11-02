@@ -7,6 +7,33 @@
 
 #include "TempRegulator.h"                                                 // Доступ к данным регулятора
 #include "TemperatureProfile.h"                                            // Работа с профилями
+#include "GlobalPreferences.h"                                             // Modified: общий экземпляр Preferences
+
+namespace {                                                                 // Modified: служебные структуры веб-интерфейса
+
+struct WebSettings {                                                        // Modified: набор веб-настроек для сохранения
+  uint8_t  activProf   = 0;                                                 // Modified: активный профиль
+  uint16_t speedHot    = 0;                                                 // Modified: скорость нагрева
+  uint16_t tRoom       = 0;                                                 // Modified: температура помещения
+  bool     isKalibrate = false;                                             // Modified: признак выполненной калибровки
+};
+
+bool saveWebSettings(const char* ns, const WebSettings& s) {                // Modified: сохраняем настройки веба в NVS
+  if (!preferences.begin(ns, /*readOnly=*/false)) {                         // Modified: открываем пространство записи
+    Serial.println("[WebInterface] Failed to open settings namespace");    // Modified: логируем ошибку
+    return false;
+  }
+
+  preferences.putUChar("activProf", s.activProf);                          // Modified: активный профиль
+  preferences.putBool("isKalibrate", s.isKalibrate);                       // Modified: признак калибровки
+  preferences.putUShort("speedHot", s.speedHot);                           // Modified: скорость нагрева
+  preferences.putUShort("tRoom", s.tRoom);                                 // Modified: комнатная температура
+
+  preferences.end();                                                        // Modified: закрываем namespace
+  return true;
+}
+
+}  // namespace
 
 // --------------------------------------------------------------------------------------
 // Singleton
@@ -227,7 +254,7 @@ String WebInterface::EmulSettingsToJSON(const String& sNVSnamespace) {
 // --------------------------------------------------------------------------------------
 void WebInterface::processInitDataToWeb() {
   String DictProfSMS = "{\"eventMessage\": \"InitProfil\",";
-  for (int i = 1; i <= 10; i++) {
+  for (int i = 1; i <= static_cast<int>(kTemperatureProfileCount); i++) { // Modified: используем общее количество профилей
     const String ns = "UserTmpProf_" + String(i);
     const String js = ExportToJSON(ns);
     Serial.println(ns);
@@ -249,7 +276,7 @@ void WebInterface::processInitDataToWeb() {
 void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
                                         const String& sProfileName,
                                         bool xIsAvailableForWeb,
-                                        TempProfileRow dataTempProfileRows[10]) {
+                                        TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]) {
   if (preferences.begin(sNVSnamespaceKey.c_str(), /*readOnly=*/false)) {
     preferences.putString("sNameProfile", sProfileName.c_str());
     preferences.putBool("isAvlablForWeb", xIsAvailableForWeb);
@@ -301,7 +328,7 @@ void WebInterface::ClearProfileDataFromNVS(const String& sNVSnamespaceKey) {
 // Парсинг профиля из входящего JSON-текста и вызов SaveProfileDataToNVS
 // --------------------------------------------------------------------------------------
 void WebInterface::ParseProfileDataFromWeb(uint8_t* payload, size_t length) {
-  TempProfileRow dataTempProfileRows[10];
+  TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS];
   const String msg = String((const char*)payload).substring(0, length);
   if (msg.length() == 0) return;
 
@@ -320,7 +347,7 @@ void WebInterface::ParseProfileDataFromWeb(uint8_t* payload, size_t length) {
   const bool   xIsAvailableForWeb = joTempProfileJSON["isAvailableForWeb"].as<bool>();
   JsonArray jaTempProfileDataTable = joTempProfileJSON["data"];
 
-  for (size_t i = 0; i < jaTempProfileDataTable.size() && i < 10; i++) {
+  for (size_t i = 0; i < jaTempProfileDataTable.size() && i < TemperatureProfile::MAX_ROWS; i++) {
     JsonObject row = jaTempProfileDataTable[i];
 
     char key1[6], key2[6], key3[6];
@@ -334,7 +361,7 @@ void WebInterface::ParseProfileDataFromWeb(uint8_t* payload, size_t length) {
   }
 
   // DEBUG
-  for (int i = 0; i < 10; i++) {
+  for (int i = 0; i < TemperatureProfile::MAX_ROWS; i++) {
     Serial.print("Row "); Serial.print(i + 1); Serial.print(": ");
     Serial.print(dataTempProfileRows[i].rStartTemperature); Serial.print("  ");
     Serial.print(dataTempProfileRows[i].rEndTemperature);   Serial.print("  ");
@@ -384,7 +411,7 @@ void WebInterface::processDebugFlags(const JsonDocument& doc) {
 // Дифф-телеметрия
 // --------------------------------------------------------------------------------------
 void WebInterface::broadcastTelemetry() {
-  const String msg = buildDiffMessage();
+  String msg = buildDiffMessage();                                        // Modified: создаём изменяемую строку для WS
   if (msg.isEmpty()) return;
 
   socket_.broadcastTXT(msg);

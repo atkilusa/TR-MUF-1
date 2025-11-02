@@ -5,6 +5,8 @@
 #include <ESPAsyncWebServer.h>                                            // Modified: HTTP-сервер
 #include <WebSocketsServer.h>                                             // Modified: WebSocket сервер
 
+#include "TemperatureProfile.h"                                          // Modified: тип TempProfileRow для обмена профилями
+
 class TempRegulator;                                                      // Modified: вперёд объявляем главный класс
 
 class WebInterface {                                                      // Modified: оболочка для работы с веб-интерфейсом
@@ -33,6 +35,16 @@ private:
   void processDeleteRequest(const JsonDocument& doc);                     // Modified: удаляем профиль
   void processSettingsRequest(const JsonDocument& doc);                   // Modified: сохраняем настройки
   void processDebugFlags(const JsonDocument& doc);                        // Modified: обновляем отладочные флаги
+
+  String ExportToJSON(const String& sNVSnamespace);                       // Modified: экспорт профиля в JSON
+  String EmulSettingsToJSON(const String& sNVSnamespace);                 // Modified: выгрузка настроек эмуляции
+  void processInitDataToWeb();                                            // Modified: отправка стартовых данных на фронт
+  void SaveProfileDataToNVS(const String& sNVSnamespaceKey,               // Modified: запись профиля в NVS
+                            const String& sProfileName,
+                            bool xIsAvailableForWeb,
+                            TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]);
+  void ClearProfileDataFromNVS(const String& sNVSnamespaceKey);           // Modified: очистка профиля в NVS
+  void ParseProfileDataFromWeb(uint8_t* payload, size_t length);          // Modified: разбор профиля из веба
 
   void broadcastTelemetry();                                              // Modified: собираем и отправляем телеметрию
   String buildDiffMessage();                                              // Modified: формируем JSON с изменениями

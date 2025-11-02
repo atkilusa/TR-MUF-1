@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+inline constexpr size_t kTemperatureProfileCount = 10;  // Modified: общее число профилей, резервируемых в NVS
+
 // Одна строка температурного профиля (ступень/сегмент)
 struct TempProfileRow {
   float rStartTemperature = 0.0f;  // начальная температура ступени, °C
