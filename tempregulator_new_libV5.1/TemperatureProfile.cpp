@@ -228,6 +228,30 @@ void TemperatureProfile::resetRows() {
   }
 }
 
+bool TemperatureProfile::isAvailable() const {  // Modified: доступность для UI
+  return available;
+}
+
+const String& TemperatureProfile::name() const {  // Modified: возвращаем текущее имя
+  return sNameProfile;
+}
+
+double TemperatureProfile::kp() const {  // Modified: PID коэффициент Kp
+  return rKp_PWM;
+}
+
+double TemperatureProfile::ki() const {  // Modified: PID коэффициент Ki
+  return rKi_PWM;
+}
+
+double TemperatureProfile::kd() const {  // Modified: PID коэффициент Kd
+  return rKd_PWM;
+}
+
+int TemperatureProfile::stepCount() const {  // Modified: количество заполненных строк
+  return usedRows;
+}
+
 void ensureDefaultTemperatureProfiles() {
   for (size_t i = 0; i < kDefaultProfileCount; ++i) {
     writeProfileDefaults(kDefaultProfiles[i]);

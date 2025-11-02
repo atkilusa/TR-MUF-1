@@ -45,6 +45,13 @@ public:
   const TempProfileRow& step(size_t idx) const;// доступ к строке профиля
   void resetRows();                             // локально обнулить строки
 
+  bool isAvailable() const;                     // Modified: флаг готовности профиля
+  const String& name() const;                   // Modified: текущее имя профиля
+  double kp() const;                            // Modified: коэффициент PID Kp
+  double ki() const;                            // Modified: коэффициент PID Ki
+  double kd() const;                            // Modified: коэффициент PID Kd
+  int stepCount() const;                        // Modified: число заполненных ступеней
+
   // --- Публичные поля/состояние (чтобы регулятор мог быстро читать) ---
   String sNVSnamespace;   // имя пространства NVS, где хранится профиль
   String sNameProfile;    // отображаемое имя профиля
