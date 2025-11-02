@@ -128,13 +128,13 @@ bool TemperatureProfile::loadFromNVS() {
 
   preferences.end();                                                      // Modified: закрываем пространство NVS
 
-  const bool hasSteps = (usedRows > 0);
-  if (hasSteps && !showInMenu) {
-    showInMenu = true;
+  const bool hasSteps = (usedRows > 0);                               // Modified: вычисляем наличие строк
+  if (hasSteps && !showInMenu) {                                      // Modified: включаем отображение, если появились данные
+    showInMenu = true;                                                // Modified: синхронизируем флаг меню
   }
 
-  available = showInMenu && hasSteps && sNameProfile.length() > 0;
-  return available;
+  available = showInMenu && hasSteps && sNameProfile.length() > 0;    // Modified: обновляем признак готовности профиля
+  return true;                                                        // Modified: чтение из NVS прошло успешно
 }
 
 // Дополнительный «удобный» метод — явная перезагрузка профиля из NVS

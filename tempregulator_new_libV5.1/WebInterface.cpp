@@ -193,41 +193,23 @@ void WebInterface::handleWebSocketEvent(uint8_t client_num,
 // Формирование JSON профиля/настроек из NVS
 // --------------------------------------------------------------------------------------
 String WebInterface::ExportToJSON(const String& sNVSnamespace) {
-  DynamicJsonDocument doc(1024);
+  DynamicJsonDocument doc(2048);                                         // Modified: увеличили буфер под полный профиль
 
-  if (preferences.begin(sNVSnamespace.c_str(), true)) {
-    doc["sNVSnamespace"]     = sNVSnamespace;
-    doc["sNameProfile"]      = preferences.getString("sNameProfile", "");
-    doc["isAvailableForWeb"] = preferences.getBool("isAvlablForWeb", false);
-    doc["rKp_PWM"]           = preferences.getDouble("rKp_PWM", 0.0);
-    doc["rKi_PWM"]           = preferences.getDouble("rKi_PWM", 0.0);
-    doc["rKd_PWM"]           = preferences.getDouble("rKd_PWM", 0.0);
-    doc["rKl_TC"]            = preferences.getDouble("rKl_TC", 0.0);
-    doc["rKc_TC"]            = preferences.getDouble("rKc_TC", 0.0);
-
-    JsonArray dataArr = doc.createNestedArray("data");
-    for (int i = 0; i < 10; i++) {
-      JsonObject row = dataArr.createNestedObject();
-
-      char key1[6], key2[6], key3[6];
-      snprintf(key1, sizeof(key1), "%u_1", i + 1);
-      snprintf(key2, sizeof(key2), "%u_2", i + 1);
-      snprintf(key3, sizeof(key3), "%u_3", i + 1);
-
-      const String baseKey = "row" + String(i) + "_";
-      row[key1] = preferences.getFloat((baseKey + "rStartTemp").c_str(), 0.0f);
-      row[key2] = preferences.getFloat((baseKey + "rEndTemp").c_str(),   0.0f);
-      row[key3] = preferences.getFloat((baseKey + "rTime").c_str(),      0.0f);
-    }
-
-    preferences.end();
-  } else {
-    Serial.println("Failed to open NVS namespace for reading in ExportToJSON");
+  TemperatureProfile profile;                                            // Modified: используем единый класс профиля
+  profile.setNamespace(sNVSnamespace);                                   // Modified: выбираем пространство NVS
+  const bool loaded = profile.loadFromNVS();                             // Modified: загружаем данные через TemperatureProfile
+  if (!loaded) {                                                         // Modified: проверяем успешность доступа к NVS
+    Serial.println("Failed to open NVS namespace for reading in ExportToJSON");  // Modified: повторяем прежний лог
+    String jsonStr;                                                      // Modified: возвращаем "null" для несовместимых профилей
+    serializeJson(doc, jsonStr);                                         // Modified: doc пустой, сериализация даст "null"
+    return jsonStr;                                                      // Modified: прекращаем выполнение
   }
 
-  String jsonStr;
-  serializeJson(doc, jsonStr);
-  return jsonStr;
+  profile.exportToJson(doc);                                             // Modified: формируем JSON тем же методом, что использует контроллер
+
+  String jsonStr;                                                        // Modified: сериализуем готовый объект
+  serializeJson(doc, jsonStr);                                           // Modified: получаем строку JSON
+  return jsonStr;                                                        // Modified: отдаём её вызывающему коду
 }
 
 String WebInterface::EmulSettingsToJSON(const String& sNVSnamespace) {
@@ -277,21 +259,28 @@ void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
                                         const String& sProfileName,
                                         bool xIsAvailableForWeb,
                                         TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]) {
-  if (preferences.begin(sNVSnamespaceKey.c_str(), /*readOnly=*/false)) {
-    preferences.putString("sNameProfile", sProfileName.c_str());
-    preferences.putBool("isAvlablForWeb", xIsAvailableForWeb);
+  TemperatureProfile profile;                                            // Modified: используем логику TemperatureProfile
+  profile.setNamespace(sNVSnamespaceKey);                                // Modified: назначаем пространство NVS
+  profile.setDefaultName(sProfileName);                                  // Modified: сохраняем имя по умолчанию
 
-    for (int i = 0; i < TemperatureProfile::MAX_ROWS; i++) {
-      const String baseKey = "row" + String(i) + "_";
-      preferences.putFloat((baseKey + "rStartTemp").c_str(), dataTempProfileRows[i].rStartTemperature);
-      preferences.putFloat((baseKey + "rEndTemp").c_str(),   dataTempProfileRows[i].rEndTemperature);
-      preferences.putFloat((baseKey + "rTime").c_str(),      dataTempProfileRows[i].rTime);
+  size_t usedRowCount = 0;                                               // Modified: определяем количество заполненных строк
+  for (int i = 0; i < TemperatureProfile::MAX_ROWS; ++i) {               // Modified: перебираем все строки
+    const TempProfileRow& row = dataTempProfileRows[i];                  // Modified: читаем данные строки
+    if (row.rTime != 0.0f || row.rStartTemperature != 0.0f || row.rEndTemperature != 0.0f) {
+      usedRowCount = static_cast<size_t>(i + 1);                         // Modified: запоминаем последнюю непустую строку
     }
+  }
 
-    preferences.end();
-    Serial.println("Успешно загружено в NVS");
+  if (profile.saveToNVS(sProfileName,                                     // Modified: сохраняем через общий метод
+                         dataTempProfileRows,
+                         usedRowCount,
+                         xIsAvailableForWeb)) {
+    Serial.printf("[WS] Profile '%s' saved (%u rows)\n",                 // Modified: подробный лог сохранения
+                  sNVSnamespaceKey.c_str(),
+                  static_cast<unsigned>(usedRowCount));
   } else {
-    Serial.println("Failed to open NVS namespace for reading");
+    Serial.printf("[WS] Failed to save profile '%s' via TemperatureProfile\n",  // Modified: лог ошибки
+                  sNVSnamespaceKey.c_str());
   }
 }
 
@@ -299,28 +288,18 @@ void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
 // Обнуление профиля в NVS (вместо delete)
 // --------------------------------------------------------------------------------------
 void WebInterface::ClearProfileDataFromNVS(const String& sNVSnamespaceKey) {
-  if (preferences.begin(sNVSnamespaceKey.c_str(), /*readOnly=*/false)) {
-    // Метаданные
-    preferences.putString("sNameProfile", "");
-    preferences.putBool("isAvlablForWeb", false);
+  TemperatureProfile profile;                                            // Modified: используем класс профиля
+  profile.setNamespace(sNVSnamespaceKey);                                // Modified: выбираем пространство
 
-    // Таблица значений профиля
-    for (int i = 0; i < TemperatureProfile::MAX_ROWS; ++i) {
-      const String baseKey = "row" + String(i) + "_";
-      preferences.putFloat((baseKey + "rStartTemp").c_str(), 0.0f);
-      preferences.putFloat((baseKey + "rEndTemp").c_str(),   0.0f);
-      preferences.putFloat((baseKey + "rTime").c_str(),      0.0f);
-    }
+  if (profile.clearInNVS()) {                                            // Modified: очищаем через saveToNVS()
+    Serial.printf("[WS] NVS cleared for namespace '%s'\n",               // Modified: подтверждаем очистку
+                  sNVSnamespaceKey.c_str());
 
-    preferences.end();
-    Serial.printf("[WS] NVS cleared for namespace '%s'\n", sNVSnamespaceKey.c_str());
-
-    // Обновим кэш профилей у регулятора
-    if (regulator_) {
+    if (regulator_) {                                                    // Modified: обновляем кэш профилей регулятора
       regulator_->loadTemperatureProfiles();
     }
   } else {
-    Serial.println("[WS] Failed to open NVS namespace for clearing");
+    Serial.println("[WS] Failed to open NVS namespace for clearing");    // Modified: сигнализируем об ошибке
   }
 }
 
@@ -328,7 +307,7 @@ void WebInterface::ClearProfileDataFromNVS(const String& sNVSnamespaceKey) {
 // Парсинг профиля из входящего JSON-текста и вызов SaveProfileDataToNVS
 // --------------------------------------------------------------------------------------
 void WebInterface::ParseProfileDataFromWeb(uint8_t* payload, size_t length) {
-  TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS];
+  TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]{};     // Modified: инициализируем массив нулями
   const String msg = String((const char*)payload).substring(0, length);
   if (msg.length() == 0) return;
 
@@ -368,7 +347,7 @@ void WebInterface::ParseProfileDataFromWeb(uint8_t* payload, size_t length) {
     Serial.println(dataTempProfileRows[i].rTime);
   }
 
-  SaveProfileDataToNVS(sNVSnamespaceKey, sProfileName, xIsAvailableForWeb, dataTempProfileRows);
+  SaveProfileDataToNVS(sNVSnamespaceKey, sProfileName, xIsAvailableForWeb, dataTempProfileRows);  // Modified: сохраняем через общий метод
 }
 
 // --------------------------------------------------------------------------------------
