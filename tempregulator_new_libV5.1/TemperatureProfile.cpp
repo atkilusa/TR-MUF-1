@@ -37,6 +37,7 @@ void resetRowsInPrefs(Preferences& prefs) {                               // з�
 }
 
 void writeProfileDefaults(const DefaultProfileDefinition& def) {          // записывает дефолтные значения
+  PreferencesLock lock;                                                   // Modified: синхронизируем доступ к Preferences
   if (!preferences.begin(def.nspace, false)) {                            // Modified: открываем глобальный Preferences
     return;
   }
@@ -81,6 +82,7 @@ void TemperatureProfile::setDefaultName(const String& name) {
 }
 
 bool TemperatureProfile::loadFromNVS() {
+  PreferencesLock lock;                                                   // Modified: защищаем последовательность begin/end
   if (sNVSnamespace.isEmpty()) {
     return false;
   }
@@ -146,6 +148,7 @@ bool TemperatureProfile::saveToNVS(const String& name,
                                    const TempProfileRow* newRows,
                                    size_t rowCount,
                                    bool visibleForWeb) {
+  PreferencesLock lock;                                                   // Modified: эксклюзивный доступ при записи
   if (sNVSnamespace.isEmpty()) {
     return false;
   }

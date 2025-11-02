@@ -19,6 +19,7 @@ struct WebSettings {                                                        // M
 };
 
 bool saveWebSettings(const char* ns, const WebSettings& s) {                // Modified: сохраняем настройки веба в NVS
+  PreferencesLock lock;                                                     // Modified: защищаем доступ к Preferences
   if (!preferences.begin(ns, /*readOnly=*/false)) {                         // Modified: открываем пространство записи
     Serial.println("[WebInterface] Failed to open settings namespace");    // Modified: логируем ошибку
     return false;
@@ -197,12 +198,19 @@ String WebInterface::ExportToJSON(const String& sNVSnamespace) {
 
   TemperatureProfile profile;                                            // Modified: используем единый класс профиля
   profile.setNamespace(sNVSnamespace);                                   // Modified: выбираем пространство NVS
-  const bool loaded = profile.loadFromNVS();                             // Modified: загружаем данные через TemperatureProfile
+  bool loaded = profile.loadFromNVS();                                   // Modified: загружаем данные через TemperatureProfile
   if (!loaded) {                                                         // Modified: проверяем успешность доступа к NVS
     Serial.println("Failed to open NVS namespace for reading in ExportToJSON");  // Modified: повторяем прежний лог
-    String jsonStr;                                                      // Modified: возвращаем "null" для несовместимых профилей
-    serializeJson(doc, jsonStr);                                         // Modified: doc пустой, сериализация даст "null"
-    return jsonStr;                                                      // Modified: прекращаем выполнение
+
+    if (profile.saveToNVS(profile.name(), nullptr, 0, false)) {          // Modified: создаём пустой профиль при первом обращении
+      loaded = profile.loadFromNVS();                                    // Modified: повторяем чтение после инициализации
+    }
+
+    if (!loaded) {                                                       // Modified: если повторная попытка не удалась
+      String jsonStr;                                                    // Modified: возвращаем "null" для несовместимых профилей
+      serializeJson(doc, jsonStr);                                       // Modified: doc пустой, сериализация даст "null"
+      return jsonStr;                                                    // Modified: прекращаем выполнение
+    }
   }
 
   profile.exportToJson(doc);                                             // Modified: формируем JSON тем же методом, что использует контроллер
@@ -215,6 +223,7 @@ String WebInterface::ExportToJSON(const String& sNVSnamespace) {
 String WebInterface::EmulSettingsToJSON(const String& sNVSnamespace) {
   DynamicJsonDocument doc(1024);
 
+  PreferencesLock lock;                                                     // Modified: эксклюзивный доступ на время чтения
   if (preferences.begin(sNVSnamespace.c_str(), true)) {
     Serial.println(sNVSnamespace.c_str());
     doc["activProf"]   = preferences.getUInt("activProf", 0);
