@@ -3,6 +3,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+inline constexpr size_t kTemperatureProfileCount = 10;  // Modified: общее число профилей, резервируемых в NVS
+
 // Одна строка температурного профиля (ступень/сегмент)
 struct TempProfileRow {
   float rStartTemperature = 0.0f;  // начальная температура ступени, °C
@@ -27,21 +29,18 @@ public:
   bool loadFromNVS();   // загрузить текущее состояние профиля из NVS
   bool UpdateFromNVS(); // синоним для удобства, вызывает loadFromNVS()
 
-  // Сохранить профиль в NVS (имя, таблица строк, видимость для WEB/UI)
-  // newRows может быть nullptr; rowCount — реальное число строк newRows
-  bool saveToNVS(const String& name,
-                 const TempProfileRow* newRows,
-                 size_t rowCount,
-                 bool visibleForWeb);
-
-  // Очистить профиль в NVS (обнулить имя/видимость/строки)
-  bool clearInNVS();
-
   // --- Экспорт/утилиты ---
   bool exportToJson(JsonDocument& doc) const;  // сериализация профиля в JSON
   bool hasPidCoefficients() const;             // есть ли ненулевые PID
   const TempProfileRow& step(size_t idx) const;// доступ к строке профиля
   void resetRows();                             // локально обнулить строки
+
+  bool isAvailable() const;                     // Modified: флаг готовности профиля
+  const String& name() const;                   // Modified: текущее имя профиля
+  double kp() const;                            // Modified: коэффициент PID Kp
+  double ki() const;                            // Modified: коэффициент PID Ki
+  double kd() const;                            // Modified: коэффициент PID Kd
+  int stepCount() const;                        // Modified: число заполненных ступеней
 
   // --- Публичные поля/состояние (чтобы регулятор мог быстро читать) ---
   String sNVSnamespace;   // имя пространства NVS, где хранится профиль

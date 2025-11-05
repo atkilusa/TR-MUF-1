@@ -1,6 +1,8 @@
 #include "TemperatureProfile.h"                                           // подключаем объявление класса профиля
 #include <Preferences.h>                                                  // используем NVS для сохранения профилей
 
+#include "GlobalPreferences.h"                                           // Modified: единый экземпляр Preferences для проекта
+
 namespace {                                                               // внутренние вспомогательные структуры
 
 struct DefaultProfileDefinition {                                          // описание профиля по умолчанию
@@ -35,26 +37,25 @@ void resetRowsInPrefs(Preferences& prefs) {                               // з�
 }
 
 void writeProfileDefaults(const DefaultProfileDefinition& def) {          // записывает дефолтные значения
-  Preferences prefs;
-  if (!prefs.begin(def.nspace, false)) {
+  if (!preferences.begin(def.nspace, false)) {                            // Modified: открываем глобальный Preferences
     return;
   }
 
-  bool hasAny = prefs.isKey("sNameProfile") || prefs.isKey("name") || prefs.isKey("isAvlablForWeb");
+  bool hasAny = preferences.isKey("sNameProfile") || preferences.isKey("name") || preferences.isKey("isAvlablForWeb");  // Modified: проверяем наличие записей
   if (!hasAny) {
-    prefs.putString("sNameProfile", def.displayName);
-    prefs.putString("name",        def.displayName);
-    prefs.putBool("isAvlablForWeb", def.showOnWeb);
-    prefs.putBool("visible",        def.showOnWeb);
-    prefs.putDouble("rKp_PWM", 0.0);
-    prefs.putDouble("rKi_PWM", 0.0);
-    prefs.putDouble("rKd_PWM", 0.0);
-    prefs.putDouble("rKl_TC", 1.0);
-    prefs.putDouble("rKc_TC", 0.0);
-    resetRowsInPrefs(prefs);
+    preferences.putString("sNameProfile", def.displayName);              // Modified: сохраняем имя по умолчанию
+    preferences.putString("name",        def.displayName);              // Modified: совместимость со старым ключом
+    preferences.putBool("isAvlablForWeb", def.showOnWeb);                // Modified: включаем профиль в веб
+    preferences.putBool("visible",        def.showOnWeb);                // Modified: показываем в меню LVGL
+    preferences.putDouble("rKp_PWM", 0.0);                               // Modified: PID по умолчанию
+    preferences.putDouble("rKi_PWM", 0.0);
+    preferences.putDouble("rKd_PWM", 0.0);
+    preferences.putDouble("rKl_TC", 1.0);
+    preferences.putDouble("rKc_TC", 0.0);
+    resetRowsInPrefs(preferences);                                        // Modified: очищаем таблицу ступеней
   }
 
-  prefs.end();
+  preferences.end();                                                      // Modified: закрываем namespace
 }
 
 }  // namespace
@@ -80,8 +81,6 @@ void TemperatureProfile::setDefaultName(const String& name) {
 }
 
 bool TemperatureProfile::loadFromNVS() {
-  Preferences prefs;
-
   if (sNVSnamespace.isEmpty()) {
     return false;
   }
@@ -96,93 +95,51 @@ bool TemperatureProfile::loadFromNVS() {
   // если ключей нет, сохранятся прежние поля объекта.
   resetRows();
 
-  if (!prefs.begin(sNVSnamespace.c_str(), true)) {
+  if (!preferences.begin(sNVSnamespace.c_str(), true)) {                  // Modified: открываем глобальный Preferences на чтение
     return false;
   }
 
-  String storedName = prefs.getString("sNameProfile",
-                         prefs.getString("name", sNameProfile));
+  String storedName = preferences.getString("sNameProfile",              // Modified: считываем имя из NVS
+                         preferences.getString("name", sNameProfile));
   storedName.trim();
   if (storedName.length() > 0) {
     sNameProfile = storedName;
   }
 
-  rKp_PWM = prefs.getDouble("rKp_PWM", rKp_PWM);
-  rKi_PWM = prefs.getDouble("rKi_PWM", rKi_PWM);
-  rKd_PWM = prefs.getDouble("rKd_PWM", rKd_PWM);
-  rKl_TC  = prefs.getDouble("rKl_TC",  rKl_TC);
-  rKc_TC  = prefs.getDouble("rKc_TC",  rKc_TC);
+  rKp_PWM = preferences.getDouble("rKp_PWM", rKp_PWM);                   // Modified: обновляем коэффициенты PID
+  rKi_PWM = preferences.getDouble("rKi_PWM", rKi_PWM);
+  rKd_PWM = preferences.getDouble("rKd_PWM", rKd_PWM);
+  rKl_TC  = preferences.getDouble("rKl_TC",  rKl_TC);
+  rKc_TC  = preferences.getDouble("rKc_TC",  rKc_TC);
 
-  showInMenu      = prefs.getBool("visible", false);
-  availableForWeb = prefs.getBool("isAvlablForWeb", showInMenu);
+  showInMenu      = preferences.getBool("visible", false);               // Modified: подгружаем флаги видимости
+  availableForWeb = preferences.getBool("isAvlablForWeb", showInMenu);
 
   for (int i = 0; i < MAX_ROWS; ++i) {
     String baseKey = "row" + String(i) + "_";
-    rows[i].rStartTemperature = prefs.getFloat((baseKey + "rStartTemp").c_str(), 0.0f);
-    rows[i].rEndTemperature   = prefs.getFloat((baseKey + "rEndTemp").c_str(),   0.0f);
-    rows[i].rTime             = prefs.getFloat((baseKey + "rTime").c_str(),      0.0f);
+    rows[i].rStartTemperature = preferences.getFloat((baseKey + "rStartTemp").c_str(), 0.0f);  // Modified: ступени из общего prefs
+    rows[i].rEndTemperature   = preferences.getFloat((baseKey + "rEndTemp").c_str(),   0.0f);
+    rows[i].rTime             = preferences.getFloat((baseKey + "rTime").c_str(),      0.0f);
 
     if (rows[i].rTime > 0.0f || rows[i].rStartTemperature != 0.0f || rows[i].rEndTemperature != 0.0f) {
       ++usedRows;
     }
   }
 
-  prefs.end();
+  preferences.end();                                                      // Modified: закрываем пространство NVS
 
-  const bool hasSteps = (usedRows > 0);
-  if (hasSteps && !showInMenu) {
-    showInMenu = true;
+  const bool hasSteps = (usedRows > 0);                               // Modified: вычисляем наличие строк
+  if (hasSteps && !showInMenu) {                                      // Modified: включаем отображение, если появились данные
+    showInMenu = true;                                                // Modified: синхронизируем флаг меню
   }
 
-  available = showInMenu && hasSteps && sNameProfile.length() > 0;
-  return available;
+  available = showInMenu && hasSteps && sNameProfile.length() > 0;    // Modified: обновляем признак готовности профиля
+  return true;                                                        // Modified: чтение из NVS прошло успешно
 }
 
 // Дополнительный «удобный» метод — явная перезагрузка профиля из NVS
 bool TemperatureProfile::UpdateFromNVS() {
   return loadFromNVS();
-}
-
-bool TemperatureProfile::saveToNVS(const String& name,
-                                   const TempProfileRow* newRows,
-                                   size_t rowCount,
-                                   bool visibleForWeb) {
-  if (sNVSnamespace.isEmpty()) {
-    return false;
-  }
-
-  Preferences prefs;
-  if (!prefs.begin(sNVSnamespace.c_str(), false)) {
-    return false;
-  }
-
-  prefs.putString("sNameProfile", name);
-  prefs.putString("name",         name);
-  prefs.putBool("isAvlablForWeb", visibleForWeb);
-  prefs.putBool("visible",        visibleForWeb);
-
-  for (int i = 0; i < MAX_ROWS; ++i) {
-    TempProfileRow row{};
-    if (newRows && static_cast<size_t>(i) < rowCount) {
-      row = newRows[i];
-    }
-    String baseKey = "row" + String(i) + "_";
-    prefs.putFloat((baseKey + "rStartTemp").c_str(), row.rStartTemperature);
-    prefs.putFloat((baseKey + "rEndTemp").c_str(),   row.rEndTemperature);
-    prefs.putFloat((baseKey + "rTime").c_str(),      row.rTime);
-  }
-
-  prefs.end();
-
-  // Локально обновим зеркальное состояние объекта: читаем обратно из NVS,
-  // чтобы инстанс сразу отражал сохранённые значения (важно для веб-правок).
-  return loadFromNVS();
-}
-
-bool TemperatureProfile::clearInNVS() {
-  TempProfileRow zeroRows[MAX_ROWS]{};
-  // Сохраняем «пустой» профиль и одновременно локально обновляемся через loadFromNVS()
-  return saveToNVS("", zeroRows, 0, false);
 }
 
 bool TemperatureProfile::exportToJson(JsonDocument& doc) const {
@@ -228,6 +185,30 @@ void TemperatureProfile::resetRows() {
   for (int i = 0; i < MAX_ROWS; ++i) {
     rows[i] = TempProfileRow{};
   }
+}
+
+bool TemperatureProfile::isAvailable() const {  // Modified: доступность для UI
+  return available;
+}
+
+const String& TemperatureProfile::name() const {  // Modified: возвращаем текущее имя
+  return sNameProfile;
+}
+
+double TemperatureProfile::kp() const {  // Modified: PID коэффициент Kp
+  return rKp_PWM;
+}
+
+double TemperatureProfile::ki() const {  // Modified: PID коэффициент Ki
+  return rKi_PWM;
+}
+
+double TemperatureProfile::kd() const {  // Modified: PID коэффициент Kd
+  return rKd_PWM;
+}
+
+int TemperatureProfile::stepCount() const {  // Modified: количество заполненных строк
+  return usedRows;
 }
 
 void ensureDefaultTemperatureProfiles() {

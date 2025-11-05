@@ -5,6 +5,8 @@
 #include <ESPAsyncWebServer.h>                                            // Modified: HTTP-сервер
 #include <WebSocketsServer.h>                                             // Modified: WebSocket сервер
 
+#include "TemperatureProfile.h"                                          // Modified: тип TempProfileRow для обмена профилями
+
 class TempRegulator;                                                      // Modified: вперёд объявляем главный класс
 
 class WebInterface {                                                      // Modified: оболочка для работы с веб-интерфейсом
@@ -34,12 +36,27 @@ private:
   void processSettingsRequest(const JsonDocument& doc);                   // Modified: сохраняем настройки
   void processDebugFlags(const JsonDocument& doc);                        // Modified: обновляем отладочные флаги
 
+  String ExportToJSON(const String& sNVSnamespace);                       // Modified: экспорт профиля в JSON
+  String EmulSettingsToJSON(const String& sNVSnamespace);                 // Modified: выгрузка настроек эмуляции
+  void processInitDataToWeb();                                            // Modified: отправка стартовых данных на фронт
+  bool SaveProfileDataToNVS(const String& sNVSnamespaceKey,               // Modified: запись профиля в NVS
+                            const String& sProfileName,
+                            bool xIsAvailableForWeb,
+                            TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]);
+  void ClearProfileDataFromNVS(const String& sNVSnamespaceKey);           // Modified: очистка профиля в NVS
+  bool ParseProfileDataFromWeb(uint8_t* payload, size_t length);          // Modified: разбор профиля из веба
+
   void broadcastTelemetry();                                              // Modified: собираем и отправляем телеметрию
   String buildDiffMessage();                                              // Modified: формируем JSON с изменениями
 
   TempRegulator* regulator_ = nullptr;                                    // Modified: ссылка на регулятор
   AsyncWebServer server_{80};                                             // Modified: HTTP-сервер для статики
   WebSocketsServer socket_{1337};                                         // Modified: WebSocket сервер
+
+  String parsedNamespace_;                                                // Modified: последнее успешно распарсенное пространство NVS
+  String parsedProfileName_;                                              // Modified: имя профиля после парсинга
+  bool   parsedAvailableForWeb_ = false;                                  // Modified: флаг доступности профиля из веба
+  TempProfileRow parsedRows_[TemperatureProfile::MAX_ROWS]{};             // Modified: буфер строк, полученных из веба
 
   bool profisAlarm_ = false;                                              // Modified: текущее состояние тревоги профиля
   bool newProfisAlarm_ = false;                                           // Modified: новое состояние тревоги профиля
