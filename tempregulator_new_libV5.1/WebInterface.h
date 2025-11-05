@@ -39,7 +39,7 @@ private:
   String ExportToJSON(const String& sNVSnamespace);                       // Modified: экспорт профиля в JSON
   String EmulSettingsToJSON(const String& sNVSnamespace);                 // Modified: выгрузка настроек эмуляции
   void processInitDataToWeb();                                            // Modified: отправка стартовых данных на фронт
-  void SaveProfileDataToNVS(const String& sNVSnamespaceKey,               // Modified: запись профиля в NVS
+  bool SaveProfileDataToNVS(const String& sNVSnamespaceKey,               // Modified: запись профиля в NVS
                             const String& sProfileName,
                             bool xIsAvailableForWeb,
                             TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]);

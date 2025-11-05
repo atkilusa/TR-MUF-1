@@ -23,7 +23,6 @@ struct WebSettings {                                                        // M
 };
 
 bool saveWebSettings(const char* ns, const WebSettings& s) {                // Modified: сохраняем настройки веба в NVS
-  PreferencesLock lock;                                                     // Modified: защищаем доступ к Preferences
   if (!preferences.begin(ns, /*readOnly=*/false)) {                         // Modified: открываем пространство записи
     Serial.println("[WebInterface] Failed to open settings namespace");    // Modified: логируем ошибку
     return false;
@@ -170,12 +169,13 @@ void WebInterface::handleWebSocketEvent(uint8_t client_num,
       if (event == "SaveProfil") {
         // Вместо processSaveRequest: парсим и сохраняем отдельно
         if (self_->ParseProfileDataFromWeb(payload, length)) {              // Modified: сохраняем результат парсинга во внутренних буферах
-          self_->SaveProfileDataToNVS(self_->parsedNamespace_,              // Modified: записываем распарсенные данные в NVS
-                                      self_->parsedProfileName_,
-                                      self_->parsedAvailableForWeb_,
-                                      self_->parsedRows_);
-          if (self_->regulator_) {                                         // Modified: после записи обновляем профили регулятора
-            self_->regulator_->loadTemperatureProfiles();
+          if (self_->SaveProfileDataToNVS(self_->parsedNamespace_,         // Modified: записываем распарсенные данные в NVS
+                                          self_->parsedProfileName_,
+                                          self_->parsedAvailableForWeb_,
+                                          self_->parsedRows_)) {
+            if (self_->regulator_) {                                       // Modified: после записи обновляем профили регулятора
+              self_->regulator_->loadTemperatureProfiles();
+            }
           }
         }
       } else if (event == "DelProfil") {
@@ -211,7 +211,8 @@ String WebInterface::ExportToJSON(const String& sNVSnamespace) {
   if (!loaded) {                                                         // Modified: проверяем успешность доступа к NVS
     Serial.println("Failed to open NVS namespace for reading in ExportToJSON");  // Modified: повторяем прежний лог
 
-    if (profile.saveToNVS(profile.name(), nullptr, 0, false)) {          // Modified: создаём пустой профиль при первом обращении
+    TempProfileRow zeroRows[TemperatureProfile::MAX_ROWS]{};             // Modified: подготавливаем пустой профиль
+    if (SaveProfileDataToNVS(sNVSnamespace, "", false, zeroRows)) {     // Modified: создаём запись в NVS через общий метод
       loaded = profile.loadFromNVS();                                    // Modified: повторяем чтение после инициализации
     }
 
@@ -232,7 +233,6 @@ String WebInterface::ExportToJSON(const String& sNVSnamespace) {
 String WebInterface::EmulSettingsToJSON(const String& sNVSnamespace) {
   DynamicJsonDocument doc(1024);
 
-  PreferencesLock lock;                                                     // Modified: эксклюзивный доступ на время чтения
   if (preferences.begin(sNVSnamespace.c_str(), true)) {
     Serial.println(sNVSnamespace.c_str());
     doc["activProf"]   = preferences.getUInt("activProf", 0);
@@ -273,14 +273,13 @@ void WebInterface::processInitDataToWeb() {
 // --------------------------------------------------------------------------------------
 // Запись профиля в NVS (низкоуровневая)
 // --------------------------------------------------------------------------------------
-void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
+bool WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
                                         const String& sProfileName,
                                         bool xIsAvailableForWeb,
                                         TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]) {
-  PreferencesLock lock;                                                   // Modified: синхронизируем доступ к общему Preferences
   if (!preferences.begin(sNVSnamespaceKey.c_str(), false)) {              // Modified: открываем нужное пространство на запись
     Serial.println("Failed to open NVS namespace for reading");          // Modified: повторяем исходный лог ошибки
-    return;                                                               // Modified: прекращаем сохранение при ошибке
+    return false;                                                         // Modified: сигнализируем об ошибке вызывающему коду
   }
 
   preferences.putString("sNameProfile", sProfileName);                   // Modified: записываем имя профиля
@@ -301,24 +300,21 @@ void WebInterface::SaveProfileDataToNVS(const String& sNVSnamespaceKey,
   preferences.end();                                                      // Modified: закрываем пространство после записи
   Serial.printf("[WS] Profile '%s' saved to NVS\n",                       // Modified: подтверждаем успешную запись
                 sNVSnamespaceKey.c_str());
+  return true;                                                            // Modified: сообщаем об успешной записи
 }
 
 // --------------------------------------------------------------------------------------
 // Обнуление профиля в NVS (вместо delete)
 // --------------------------------------------------------------------------------------
 void WebInterface::ClearProfileDataFromNVS(const String& sNVSnamespaceKey) {
-  TemperatureProfile profile;                                            // Modified: используем класс профиля
-  profile.setNamespace(sNVSnamespaceKey);                                // Modified: выбираем пространство
-
-  if (profile.clearInNVS()) {                                            // Modified: очищаем через saveToNVS()
+  TempProfileRow zeroRows[TemperatureProfile::MAX_ROWS]{};               // Modified: обнуляем ступени перед записью
+  if (SaveProfileDataToNVS(sNVSnamespaceKey, "", false, zeroRows)) {    // Modified: очищаем профиль напрямую через общий метод
     Serial.printf("[WS] NVS cleared for namespace '%s'\n",               // Modified: подтверждаем очистку
                   sNVSnamespaceKey.c_str());
 
     if (regulator_) {                                                    // Modified: обновляем кэш профилей регулятора
       regulator_->loadTemperatureProfiles();
     }
-  } else {
-    Serial.println("[WS] Failed to open NVS namespace for clearing");    // Modified: сигнализируем об ошибке
   }
 }
 

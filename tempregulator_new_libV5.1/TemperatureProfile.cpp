@@ -37,7 +37,6 @@ void resetRowsInPrefs(Preferences& prefs) {                               // з�
 }
 
 void writeProfileDefaults(const DefaultProfileDefinition& def) {          // записывает дефолтные значения
-  PreferencesLock lock;                                                   // Modified: синхронизируем доступ к Preferences
   if (!preferences.begin(def.nspace, false)) {                            // Modified: открываем глобальный Preferences
     return;
   }
@@ -82,7 +81,6 @@ void TemperatureProfile::setDefaultName(const String& name) {
 }
 
 bool TemperatureProfile::loadFromNVS() {
-  PreferencesLock lock;                                                   // Modified: защищаем последовательность begin/end
   if (sNVSnamespace.isEmpty()) {
     return false;
   }
@@ -142,48 +140,6 @@ bool TemperatureProfile::loadFromNVS() {
 // Дополнительный «удобный» метод — явная перезагрузка профиля из NVS
 bool TemperatureProfile::UpdateFromNVS() {
   return loadFromNVS();
-}
-
-bool TemperatureProfile::saveToNVS(const String& name,
-                                   const TempProfileRow* newRows,
-                                   size_t rowCount,
-                                   bool visibleForWeb) {
-  PreferencesLock lock;                                                   // Modified: эксклюзивный доступ при записи
-  if (sNVSnamespace.isEmpty()) {
-    return false;
-  }
-
-  if (!preferences.begin(sNVSnamespace.c_str(), false)) {                 // Modified: общая точка записи в NVS
-    return false;
-  }
-
-  preferences.putString("sNameProfile", name);                            // Modified: имя профиля
-  preferences.putString("name",         name);                            // Modified: поддерживаем старый ключ
-  preferences.putBool("isAvlablForWeb", visibleForWeb);                   // Modified: флаг веб-доступности
-  preferences.putBool("visible",        visibleForWeb);                   // Modified: флаг для HMI
-
-  for (int i = 0; i < MAX_ROWS; ++i) {
-    TempProfileRow row{};
-    if (newRows && static_cast<size_t>(i) < rowCount) {
-      row = newRows[i];
-    }
-    String baseKey = "row" + String(i) + "_";
-    preferences.putFloat((baseKey + "rStartTemp").c_str(), row.rStartTemperature);  // Modified: сохраняем старт
-    preferences.putFloat((baseKey + "rEndTemp").c_str(),   row.rEndTemperature);    // Modified: сохраняем финиш
-    preferences.putFloat((baseKey + "rTime").c_str(),      row.rTime);              // Modified: сохраняем длительность
-  }
-
-  preferences.end();                                                      // Modified: закрываем namespace после записи
-
-  // Локально обновим зеркальное состояние объекта: читаем обратно из NVS,
-  // чтобы инстанс сразу отражал сохранённые значения (важно для веб-правок).
-  return loadFromNVS();
-}
-
-bool TemperatureProfile::clearInNVS() {
-  TempProfileRow zeroRows[MAX_ROWS]{};
-  // Сохраняем «пустой» профиль и одновременно локально обновляемся через loadFromNVS()
-  return saveToNVS("", zeroRows, 0, false);
 }
 
 bool TemperatureProfile::exportToJson(JsonDocument& doc) const {

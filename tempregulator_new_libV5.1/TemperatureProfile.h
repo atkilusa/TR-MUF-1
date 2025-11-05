@@ -29,16 +29,6 @@ public:
   bool loadFromNVS();   // загрузить текущее состояние профиля из NVS
   bool UpdateFromNVS(); // синоним для удобства, вызывает loadFromNVS()
 
-  // Сохранить профиль в NVS (имя, таблица строк, видимость для WEB/UI)
-  // newRows может быть nullptr; rowCount — реальное число строк newRows
-  bool saveToNVS(const String& name,
-                 const TempProfileRow* newRows,
-                 size_t rowCount,
-                 bool visibleForWeb);
-
-  // Очистить профиль в NVS (обнулить имя/видимость/строки)
-  bool clearInNVS();
-
   // --- Экспорт/утилиты ---
   bool exportToJson(JsonDocument& doc) const;  // сериализация профиля в JSON
   bool hasPidCoefficients() const;             // есть ли ненулевые PID
