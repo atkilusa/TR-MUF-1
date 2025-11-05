@@ -44,7 +44,7 @@ private:
                             bool xIsAvailableForWeb,
                             TempProfileRow dataTempProfileRows[TemperatureProfile::MAX_ROWS]);
   void ClearProfileDataFromNVS(const String& sNVSnamespaceKey);           // Modified: очистка профиля в NVS
-  void ParseProfileDataFromWeb(uint8_t* payload, size_t length);          // Modified: разбор профиля из веба
+  bool ParseProfileDataFromWeb(uint8_t* payload, size_t length);          // Modified: разбор профиля из веба
 
   void broadcastTelemetry();                                              // Modified: собираем и отправляем телеметрию
   String buildDiffMessage();                                              // Modified: формируем JSON с изменениями
@@ -52,6 +52,11 @@ private:
   TempRegulator* regulator_ = nullptr;                                    // Modified: ссылка на регулятор
   AsyncWebServer server_{80};                                             // Modified: HTTP-сервер для статики
   WebSocketsServer socket_{1337};                                         // Modified: WebSocket сервер
+
+  String parsedNamespace_;                                                // Modified: последнее успешно распарсенное пространство NVS
+  String parsedProfileName_;                                              // Modified: имя профиля после парсинга
+  bool   parsedAvailableForWeb_ = false;                                  // Modified: флаг доступности профиля из веба
+  TempProfileRow parsedRows_[TemperatureProfile::MAX_ROWS]{};             // Modified: буфер строк, полученных из веба
 
   bool profisAlarm_ = false;                                              // Modified: текущее состояние тревоги профиля
   bool newProfisAlarm_ = false;                                           // Modified: новое состояние тревоги профиля
